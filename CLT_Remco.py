@@ -25,14 +25,17 @@ class Lamina:
         self.msf = failureproperties[2]    # compensation factor, msf = 1.3 for GFRP, msf = 1.1 for CFRP
         self.R11t = failureproperties[3]   # ultimate tensile stress allowable
         self.R11c = failureproperties[4]   # ultimate compressive stress allowable
+        self.Yt = failureproperties[5]
+        self.Yc = failureproperties[6]
+        self.S = failureproperties[7]
+        self.p12 = 0.3
 
         self.Epsilon = Epsilon
         self.Sigma = Sigma
 
-
-        theta_rad = np.radians(theta)
-        m = np.cos(theta_rad)  # Cosine of the angle of the material direction 1 with the x-axis
-        n = np.sin(theta_rad)  # Sine of the angle of the material direction 1 with the x-axis
+        self.theta_rad = np.radians(theta)
+        m = np.cos(self.theta_rad)  # Cosine of the angle of the material direction 1 with the x-axis
+        n = np.sin(self.theta_rad)  # Sine of the angle of the material direction 1 with the x-axis
         # Now let's translate the equations to Python using numpy operations
 
         self.v21 = self.v12 * self.E2 / self.E1
@@ -54,7 +57,7 @@ class Lamina:
                       [Qxy, Qyy, Qys],
                       [Qxs, Qys, Qss]])
         # This Q is the ROTATED (global) q matrix, we can invert it to get the compliance matrix
-        self.S = np.linalg.inv(self.Q)
+        self.Smatrix = np.linalg.inv(self.Q)
 
     # We use the following method to carry out stress analysis for the laminate:
     def StressAnalysis(self):
@@ -64,27 +67,68 @@ class Lamina:
 
     # Finally, we can carry out failure analysis to figure out whether a lamina has failed:
     def FailureAnalysis(self, sigma):
-        pass
+        #first we rotate the stress vector sigma by -theta -> so back into 123 frame
+        m = np.cos(-self.theta_rad)
+        n = np.sin(-self.theta_rad)
+        alfamatrix = np.array([[m, n, 0],
+                               [-n, m, 0],
+                               [0, 0, 1]])
+        sigma123 = alfamatrix @ sigma
+        IFFfactor = self.IFF(sigma123)
+        FFfactor = self.FF(sigma123)
 
-    def IFFmodeA(self):
-        pass
+        if IFFfactor >= 1 or FFfactor >= 1:
+            failure = True
+        else:
+            failure = False
+        if IFFfactor >= 1.1 or FFfactor >= 1.1:
+            print('failure criteria > 1.1, load increment too big!')
 
-    def IFFmodeB(self):
-        pass
+        self.failure = failure
+        return failure
 
-    def IFFmodeC(self):
-        pass
-
-    def FFtension(self, sigma):
+    def IFF(self, sigma):
         s1 = sigma[0]
         s2 = sigma[1]
-        criterion = (1/self.R11t) * (s1 - (self.v21 - self.v21f * self.msf * (self.E1/self.E11f))*s2)
-        return criterion
+        s6 = sigma[2]
 
-    def FFcompression(self, sigma):
+        # We are looking for IFF or inter fiber fracture -> matrix failure due to normal stress in 2 direction
+        # or shear stress in 21 or 23 direction (s6). This means we only want to look at this if
+        # s2 and s6 are nonzero
+        if s2 == 0 or s6 == 0:
+            return False
+        # Now we have done that first check so we can make the criteria:
+
+        if s2 > 0:
+            f = np.sqrt((s6 / self.S) ** 2 + (1 - self.p12 * self.Yt / self.S) ** 2 * (s2 / self.Yt) ** 2) + 0.3 * s2 / self.S
+            print('Mode A failure in ply, failure f:', f)
+
+        # Intermediary values:
+        s23A = (self.S / (2 * 0.2)) * (np.sqrt(1 + 2 * 0.2 * self.Yc / self.S) - 1)
+        p12_minus = 0.25
+        p23_minus = p12_minus * s23A / self.S  # p12(-)????
+        s12c = self.S * np.sqrt(1 + 2 * p23_minus)
+
+        # figure out mode: B or C
+        if abs(s2 / s6) <= s23A / abs(s12c) and abs(s2 / s6) >= 0:
+            print('mode B')
+            f = (np.sqrt(s6 ** 2 + (p12_minus * s2) ** 2) + p12_minus * s2) / self.S
+
+        else:
+            print('mode C')
+            f = ((s6/(2*(1 + p23_minus*self.S)))**2 + (s2/self.Yc)**2)*(self.Yc/-s2)
+        return f
+
+    def FF(self, sigma):
         s1 = sigma[0]
         s2 = sigma[1]
-        criterion = (1/self.R11c) * (s1 - (self.v21 - self.v21f * self.msf * (self.E1/self.E11f))*s2)
+        if s1 < 0:
+            print('lamina is in compression')
+            R11 = self.R11t
+        else:
+            print('lamina is in tension')
+            R11 = -1 * self.R11c
+        criterion = (1/R11) * (s1 - (self.v21 - self.v21f * self.msf * (self.E1/self.E11f))*s2)
         return criterion
 
 class Laminate:
@@ -204,11 +248,13 @@ class Laminate:
             stresses[:, count] = stressesflat
         return stresses
 
-    # code the failure criteria per lamina
-
-    # def PlotStrain(self)
-
-    # def PlotStress(self)
+    #carry out failure analysis for all lamina in laminate
+    def Failurecriteria(self):
+        # We need to make sure the lamina have stresses:
+        self.StressAnalysis()
+        for count, lamina in enumerate(self.laminas):
+            lamina.FailureAnalysis(lamina.Sigma)
+        pass
 
 #now we test the code:
 E1 = 150e9
@@ -222,7 +268,10 @@ v21f = 0
 msf = 1.1
 R11t = 1000e6
 R11c = 800e6
-failureproperties = [E11f, v21f, msf, R11t, R11c]
+yt = 100e6
+yc = 100e6
+S = 100e6
+failureproperties = [E11f, v21f, msf, R11t, R11c, yt, yc, S]
 s0 = Lamina(0.0002, 0, elasticproperties, failureproperties)
 s1 = Lamina(0.0002, 0, elasticproperties, failureproperties)
 s2 = Lamina(0.0002, 0, elasticproperties, failureproperties)
@@ -237,5 +286,5 @@ laminate = Laminate(laminas)
 # now we can apply loads to the laminate: (in Newton per meter or newtonmeter per meter)
 laminate.Loads = np.array([[10000], [0], [0], [0], [0], [0]])
 
-print(laminate.StressAnalysis())
+laminate.Failurecriteria()
 
