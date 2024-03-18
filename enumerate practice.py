@@ -1,4 +1,4 @@
-
+import numpy as np
 S1 = 100e6
 S2 = 0
 S3 = 0
@@ -16,3 +16,7 @@ if S1 > 0:
     f_EFF = (1 / Rt) * (S1 - (v21 - v21f * msigmaf * (E11 / E11f)) * (S2 + S3))
 elif S1 < 0:
     f_EFF = (1 / Rc) * (S1 - (v21 - v21f * msigmaf * (E11 / E11f)) * (S2 + S3))
+
+array = np.array([[1], [2], [3]])
+
+print(array[1])

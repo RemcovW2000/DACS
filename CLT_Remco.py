@@ -3,29 +3,45 @@ import numpy as np
 np.set_printoptions(linewidth=300, precision = 3)
 
 class Lamina:
-    def __init__(self, t, theta, E1, E2, G12, v12, z0=None, z1=None, Sigma = None, Epsilon = None):
+    def __init__(self, t, theta, elasticproperties, failureproperties = None, z0=None, z1=None, Sigma = None, Epsilon = None):
+        # elasticproperties format: [E1, E2, G12, v12]
+        # failureproperties format: [E11f, v21f, msf, R11t, R11c]
+
+        # geometric properties ply
+        self.theta = theta
         self.t = t
-        self.E1 = E1  # Modulus of elasticity in material direction 1
-        self.E2 = E2  # Modulus of elasticity in material direction 2
-        self.G12 = G12  # Shear modulus in plane 12
-        self.v12 = v12  # Poisson's ratio in plane 12
         self.z0 = None
         self.z1 = None
+
+        # elastic properties
+        self.E1 = elasticproperties[0]     # Modulus of elasticity in material direction 1
+        self.E2 = elasticproperties[1]     # Modulus of elasticity in material direction 2
+        self.G12 = elasticproperties[2]    # Shear modulus in plane 12
+        self.v12 = elasticproperties[3]    # Poisson's ratio in plane 12
+
+        #failure properties
+        self.E11f = failureproperties[0]   # fiber E11
+        self.v21f = failureproperties[1]   # fiber v21
+        self.msf = failureproperties[2]    # compensation factor, msf = 1.3 for GFRP, msf = 1.1 for CFRP
+        self.R11t = failureproperties[3]   # ultimate tensile stress allowable
+        self.R11c = failureproperties[4]   # ultimate compressive stress allowable
+
         self.Epsilon = Epsilon
         self.Sigma = Sigma
+
 
         theta_rad = np.radians(theta)
         m = np.cos(theta_rad)  # Cosine of the angle of the material direction 1 with the x-axis
         n = np.sin(theta_rad)  # Sine of the angle of the material direction 1 with the x-axis
         # Now let's translate the equations to Python using numpy operations
 
-        v21 = v12 * E2 / E1
+        self.v21 = self.v12 * self.E2 / self.E1
 
-        Q = 1 - v12 * v21
-        Q11 = E1 / Q
-        Q22 = E2 / Q
-        Q12 = v12 * E2 / Q
-        Q66 = G12
+        Q = 1 - self.v12 * self.v21
+        Q11 = self.E1 / Q
+        Q22 = self.E2 / Q
+        Q12 = self.v12 * self.E2 / Q
+        Q66 = self.G12
 
         Qxx = Q11 * m ** 4 + 2 * (Q12 + 2 * Q66) * (m ** 2) * (n ** 2) + Q22 * (n ** 4)
         Qxy = (Q11 + Q22 - 4 * Q66) * (m ** 2) * (n ** 2) + Q12 * (m ** 4 + n ** 4)
@@ -37,23 +53,39 @@ class Lamina:
         self.Q = np.array([[Qxx, Qxy, Qxs],
                       [Qxy, Qyy, Qys],
                       [Qxs, Qys, Qss]])
-
         # This Q is the ROTATED (global) q matrix, we can invert it to get the compliance matrix
-
         self.S = np.linalg.inv(self.Q)
 
     # We use the following method to carry out stress analysis for the laminate:
     def StressAnalysis(self):
         self.Sigma = np.zeros((3, 1))
-        self.Sigma = self.Q @ self.Epsilon
+        self.Sigma = self.Q @ self.Epsilon # this is the rotated sigma in the xyz frame
         return self.Sigma
 
     # Finally, we can carry out failure analysis to figure out whether a lamina has failed:
-    def FailureAnalysis(self):
+    def FailureAnalysis(self, sigma):
         pass
 
+    def IFFmodeA(self):
+        pass
 
+    def IFFmodeB(self):
+        pass
 
+    def IFFmodeC(self):
+        pass
+
+    def FFtension(self, sigma):
+        s1 = sigma[0]
+        s2 = sigma[1]
+        criterion = (1/self.R11t) * (s1 - (self.v21 - self.v21f * self.msf * (self.E1/self.E11f))*s2)
+        return criterion
+
+    def FFcompression(self, sigma):
+        s1 = sigma[0]
+        s2 = sigma[1]
+        criterion = (1/self.R11c) * (s1 - (self.v21 - self.v21f * self.msf * (self.E1/self.E11f))*s2)
+        return criterion
 
 class Laminate:
     def __init__(self, laminas, Loads=None, Strains=None):
@@ -179,11 +211,22 @@ class Laminate:
     # def PlotStress(self)
 
 #now we test the code:
+E1 = 150e9
+E2 = 20e9
+G12 = 5e9
+v12 = 0.3
+elasticproperties = [E1, E2, G12, v12]
 
-s0 = Lamina(0.0002, 0, 150e9, 20e9, 5e9, 0.3)
-s1 = Lamina(0.0002, 0, 150e9, 20e9, 5e9, 0.3)
-s2 = Lamina(0.0002, 0, 150e9, 20e9, 5e9, 0.3)
-s3 = Lamina(0.0002, 0, 150e9, 20e9, 5e9, 0.3)
+E11f = 500e9
+v21f = 0
+msf = 1.1
+R11t = 1000e6
+R11c = 800e6
+failureproperties = [E11f, v21f, msf, R11t, R11c]
+s0 = Lamina(0.0002, 0, elasticproperties, failureproperties)
+s1 = Lamina(0.0002, 0, elasticproperties, failureproperties)
+s2 = Lamina(0.0002, 0, elasticproperties, failureproperties)
+s3 = Lamina(0.0002, 0, elasticproperties, failureproperties)
 
 # create the laminas list, for the laminate function:
 laminas = [s0, s1, s2, s3]
