@@ -3,7 +3,7 @@ import numpy as np
 np.set_printoptions(linewidth=300, precision = 3)
 
 class Lamina:
-    def __init__(self, t, theta, elasticproperties, failureproperties = None, z0=None, z1=None, Sigma = None, Epsilon = None):
+    def __init__(self, t, theta, elasticproperties, failureproperties = None, z0=None, z1=None, Sigma = None, Epsilon = None, FailureState = 0):
         # elasticproperties format: [E1, E2, G12, v12]
         # failureproperties format: [E11f, v21f, msf, R11t, R11c]
 
@@ -19,7 +19,7 @@ class Lamina:
         self.G12 = elasticproperties[2]    # Shear modulus in plane 12
         self.v12 = elasticproperties[3]    # Poisson's ratio in plane 12
 
-        #failure properties
+        # failure properties
         self.E11f = failureproperties[0]   # fiber E11
         self.v21f = failureproperties[1]   # fiber v21
         self.msf = failureproperties[2]    # compensation factor, msf = 1.3 for GFRP, msf = 1.1 for CFRP
@@ -29,6 +29,7 @@ class Lamina:
         self.Yc = failureproperties[6]
         self.S = failureproperties[7]
         self.p12 = 0.3
+        self.FailureState = FailureState
 
         self.Epsilon = Epsilon
         self.Sigma = Sigma
@@ -78,13 +79,15 @@ class Lamina:
         FFfactor = self.FF(sigma123)
 
         if IFFfactor >= 1 or FFfactor >= 1:
-            failure = True
+            failure = 1
         else:
-            failure = False
+            failure = 0
         if IFFfactor >= 1.1 or FFfactor >= 1.1:
             print('failure criteria > 1.1, load increment too big!')
 
-        self.failure = failure
+        # We have to document the failure of the ply, and then somehow use this to recalculate
+        # the properties of the ply.
+        self.FailureState += failure
         return failure
 
     def IFF(self, sigma):
@@ -96,7 +99,7 @@ class Lamina:
         # or shear stress in 21 or 23 direction (s6). This means we only want to look at this if
         # s2 and s6 are nonzero
         if s2 == 0 or s6 == 0:
-            return False
+            return 0
         # Now we have done that first check so we can make the criteria:
 
         if s2 > 0:
@@ -128,12 +131,13 @@ class Lamina:
         else:
             print('lamina is in tension')
             R11 = -1 * self.R11c
-        criterion = (1/R11) * (s1 - (self.v21 - self.v21f * self.msf * (self.E1/self.E11f))*s2)
-        return criterion
+        f = (1 / R11) * (s1 - (self.v21 - self.v21f * self.msf * (self.E1 / self.E11f)) * s2)
+        return f
 
 class Laminate:
     def __init__(self, laminas, Loads=None, Strains=None):
         self.laminas = laminas  # the layers have an order and a thickness, so find the thickness of laminate
+
         # calculate total thickness
         # find layer start and end height
         h = 0
@@ -151,6 +155,7 @@ class Laminate:
             i.z1 = i.z1 - 0.5 * h
         self.h = h
 
+        # We need to make a function for the ABD matrix, as we need to recalculate
         # Initialize A_ij as a zero matrix
         # Assuming Q is a 2D array, we need to know its size to initialize A_ij.
         # We're assuming all Q matrices are the same size, as an example we use 3x3.
@@ -212,15 +217,6 @@ class Laminate:
             max3 = max(Strains[2] - i.z0 * Strains[5], Strains[2] - i.z1 * Strains[5], key=abs)
             i.Epsilon = np.array([max1, max2, max3])
 
-    # def CalculateLaminaStrains(self):
-    #     self.CalculateStrains()
-    #     Strains = self.Strains
-    #     for i in self.laminas:
-    #         e1 = Strains[0] - ((i.z0 + i.z1) / 2) * Strains[3]
-    #         e2 = Strains[1] - ((i.z0 + i.z1) / 2) * Strains[4]
-    #         e3 = Strains[2] - ((i.z0 + i.z1) / 2) * Strains[5]
-    #         i.Epsilon = np.array([[e1], [e2], [e3]])
-
     def CalculateEquivalentProperties(self):
         Ex = (self.A_matrix[0, 0] * self.A_matrix[1, 1] - self.A_matrix[0, 1] ** 2) / (self.h * self.A_matrix[1, 1])
         Ey = (self.A_matrix[0, 0] * self.A_matrix[1, 1] - self.A_matrix[0, 1] ** 2) / (self.h * self.A_matrix[0, 0])
@@ -257,10 +253,11 @@ class Laminate:
         pass
 
 #now we test the code:
-E1 = 150e9
-E2 = 20e9
-G12 = 5e9
+E1 = 140
+E2 = 10
+G12 = 5
 v12 = 0.3
+
 elasticproperties = [E1, E2, G12, v12]
 
 E11f = 500e9
@@ -271,20 +268,24 @@ R11c = 800e6
 yt = 100e6
 yc = 100e6
 S = 100e6
+
 failureproperties = [E11f, v21f, msf, R11t, R11c, yt, yc, S]
-s0 = Lamina(0.0002, 0, elasticproperties, failureproperties)
-s1 = Lamina(0.0002, 0, elasticproperties, failureproperties)
-s2 = Lamina(0.0002, 0, elasticproperties, failureproperties)
-s3 = Lamina(0.0002, 0, elasticproperties, failureproperties)
+s0 = Lamina(0.2, 0, elasticproperties, failureproperties)
+s1 = Lamina(0.2, 45, elasticproperties, failureproperties)
+s2 = Lamina(0.2, -45, elasticproperties, failureproperties)
+s3 = Lamina(0.2, 90, elasticproperties, failureproperties)
+s4 = Lamina(0.2, 90, elasticproperties, failureproperties)
+s5 = Lamina(0.2, -45, elasticproperties, failureproperties)
+s6 = Lamina(0.2, 45, elasticproperties, failureproperties)
+s7 = Lamina(0.2, 0, elasticproperties, failureproperties)
 
 # create the laminas list, for the laminate function:
-laminas = [s0, s1, s2, s3]
+laminas = [s0, s1, s2, s3, s4, s5, s6, s7]
 
 # creating the laminate object:
 laminate = Laminate(laminas)
-
 # now we can apply loads to the laminate: (in Newton per meter or newtonmeter per meter)
-laminate.Loads = np.array([[10000], [0], [0], [0], [0], [0]])
+laminate.Loads = np.array([[10], [0], [0], [0], [0], [0]])
+print(laminate.StressAnalysis())
 
-laminate.Failurecriteria()
-
+# We have to do the load increments, in the class?
