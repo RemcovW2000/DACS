@@ -23,8 +23,8 @@ S = 100
 
 failureproperties = [E11f, v21f, msf, R11t, R11c, yt, yc, S]
 s0 = Lamina(0.25, 0, elasticproperties, failureproperties)
-s1 = Lamina(0.25, 0, elasticproperties, failureproperties)
-s2 = Lamina(0.25, 0, elasticproperties, failureproperties)
+s1 = Lamina(0.25, 45, elasticproperties, failureproperties)
+s2 = Lamina(0.25, -45, elasticproperties, failureproperties)
 s3 = Lamina(0.25, 0, elasticproperties, failureproperties)
 
 # create the laminas list, for the laminate function:
@@ -33,6 +33,6 @@ laminas = [s0, s1, s2, s3]
 # creating the laminate object:
 laminate = Laminate(laminas)
 # now we can apply loads to the laminate: (in Newton per meter or newtonmeter per meter)
-laminate.Loads = np.array([[0], [10000], [0], [0], [0], [0]])
+loadingratio = np.array([[1], [0.1], [0], [0], [0], [0]])
 
-print(laminate.FailureAnalysis())
+print(laminate.ProgressiveDamageAnalysis(loadingratio, 0.1))

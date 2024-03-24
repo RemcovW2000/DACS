@@ -123,6 +123,48 @@ class Laminate:
         # We need to make sure the lamina have stresses:
         self.StressAnalysis()
         for count, lamina in enumerate(self.laminas):
+            # Now run for the lamina, the failure analysis
             lamina.FailureAnalysis(lamina.Sigma)
             self.FailureState[count] = lamina.FailureState
         return self.FailureState
+
+    def ProgressiveDamageAnalysis(self, loadingratio, loadincrement):
+        # We want to expose the laminate to a loading ratio, given as a numpy array
+        # for example: np.array([[800], [70], [0], [0], [0], [0]])
+        # We then want to normalize the list and apply loads in the ratio of the list
+        normalized_loadingratio = loadingratio / np.max(np.abs(loadingratio))
+
+        # We can save the point of FPF and LPF for later plotting
+        LPF = False
+        FPF = False
+
+        # When failure happens we make a datapoint containing:
+        # The lamina stresses
+        # The global loads
+        # The global strains
+        # We do this at the lamina level!
+
+        # Now we loop thru the load increments untill we reach last ply failure
+        n = 0
+        while LPF == False:
+            # First we calculate the load for this iteration:
+            Loads = normalized_loadingratio * n * loadincrement
+            self.Loads = Loads
+            # Then we run the actual failure analysis for the laminate, which also returns the failure state of the laminate:
+            FailureState = self.FailureAnalysis()
+
+            # We also want the first ply failure load:
+            # And to know which ply fails!
+            if FPF == False and np.any(FailureState == 1):
+                #First ply failure is true now
+                FPF = True
+                FPF_load = Loads
+
+            # Then we check whether we achieved full failure of all the lamina:
+            if np.all(FailureState >= 1):
+                LPF = True
+                LPF_load = Loads
+
+            n += 1
+        return FPF_load, LPF_load
+
