@@ -7,8 +7,8 @@ class Lamina:
         # [0.1, 0, 0.1, 0.1] for failurestate 1
         # [0, 0, 0, 0] for failurestate 2
         self.DamageProgression = np.array([[1, 1, 1, 1],
-                                           [0.1, 0, 0.1, 0.1],
-                                           [0, 0, 0, 0]])
+                                           [0.1, 1e-10, 0.1, 0.1],
+                                           [1e-10, 1e-10, 1e-10, 1e-10]])
 
         # geometric properties ply
         self.theta = theta
@@ -49,6 +49,12 @@ class Lamina:
         self.CalculateQS()
 
     def CalculateQS(self):
+        # # If the failure state is 1 or above for now just remove the elastic properties
+        # if self.FailureState > 0:
+        #     self.Q = np.zeros((3, 3))
+        #     self.Smatrix = np.full((3, 3), 1e10)
+        #     return
+
         # Based on the failurestate, we should take different values for the elastic properties:
         self.ElasticPropertiesCurrent = self.DamageProgression[self.FailureState] * self.ElasticProperties
 
@@ -110,7 +116,8 @@ class Lamina:
         else:
             failure = 0
         if IFFfactor >= 1.1 or FFfactor >= 1.1:
-            print('failure criteria > 1.1, load increment too big!')
+            # print('failure criteria > 1.1, load increment too big! Failurestate = ', self.FailureState, 'with factor (IFF, FF)', IFFfactor, FFfactor)
+            pass
         self.FailureState += failure
         return failure
 
@@ -152,3 +159,4 @@ class Lamina:
             R11 = self.R11t
         f = (1 / R11) * (s1 - (self.v21 - self.v21f * self.msf * (self.E1 / self.E11f)) * s2)
         return f
+
