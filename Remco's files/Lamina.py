@@ -7,8 +7,8 @@ class Lamina:
         # [0.1, 0, 0.1, 0.1] for failurestate 1
         # [0, 0, 0, 0] for failurestate 2
         self.DamageProgression = np.array([[1, 1, 1, 1],
-                                           [0.1, 0, 0.1, 0.1],
-                                           [0, 0, 0, 0]])
+                                           [0.1, 1e-10, 0.1, 0.1],
+                                           [1e-10, 1e-10, 1e-10, 1e-10]])
 
         # geometric properties ply
         self.theta = theta
@@ -43,11 +43,18 @@ class Lamina:
 
         self.Epsilon = Epsilon
         self.Sigma = Sigma
+        self.FailureStresses = []
 
         self.theta_rad = np.radians(theta)
         self.CalculateQS()
 
     def CalculateQS(self):
+        # # If the failure state is 1 or above for now just remove the elastic properties
+        # if self.FailureState > 0:
+        #     self.Q = np.zeros((3, 3))
+        #     self.Smatrix = np.full((3, 3), 1e10)
+        #     return
+
         # Based on the failurestate, we should take different values for the elastic properties:
         self.ElasticPropertiesCurrent = self.DamageProgression[self.FailureState] * self.ElasticProperties
 
@@ -78,7 +85,10 @@ class Lamina:
                            [Qxy, Qyy, Qys],
                            [Qxs, Qys, Qss]])
         # This Q is the ROTATED (global) q matrix, we can invert it to get the compliance matrix
-        self.Smatrix = np.linalg.inv(self.Q)
+        try:
+            self.Smatrix = np.linalg.inv(self.Q)
+        except:
+            print("Singular Q matrix, does this mean it's zero?")
 
     # We use the following method to carry out stress analysis for the laminate:
     def StressAnalysis(self):
@@ -100,10 +110,14 @@ class Lamina:
 
         if IFFfactor >= 1 or FFfactor >= 1:
             failure = 1
+
+            # We want to save the stesses at failure of a ply:
+            self.FailureStresses.append(sigma123)
         else:
             failure = 0
         if IFFfactor >= 1.1 or FFfactor >= 1.1:
-            print('failure criteria > 1.1, load increment too big!')
+            # print('failure criteria > 1.1, load increment too big! Failurestate = ', self.FailureState, 'with factor (IFF, FF)', IFFfactor, FFfactor)
+            pass
         self.FailureState += failure
         return failure
 
@@ -126,12 +140,11 @@ class Lamina:
         s12c = self.S * np.sqrt(1 + 2 * p23_minus)
 
         # Mode A:
-        if s2 > 0:
+        if s2 >= 0:
             f = np.sqrt((s6 / self.S) ** 2 + (1 - self.p12 * self.Yt / self.S) ** 2 * (s2 / self.Yt) ** 2) + 0.3 * s2 / self.S
-        # Now if s2 < 0 then it could be either mode b or mode c, however we could get a
-        # divide by 0 error, so we need to find a way to see if the conditional cant be
-        # rewritten?
-        elif abs(s2 / s6) <= s23A / abs(s12c) and abs(s2 / s6) >= 0:
+        # Now if s2 < 0 then it could be either mode b or mode c, which we check:
+        elif abs(s2 / (abs(s6) + 1e-11)) <= s23A / abs(s12c) and abs(s2 / (abs(s6) + 1e-11)) >= 0:
+            # In the above line the following code: (abs(s6) + 1e-11) functions to prevent a div by zero error
             f = (np.sqrt(s6 ** 2 + (p12_minus * s2) ** 2) + p12_minus * s2) / self.S
         else:
             f = ((s6/(2*(1 + p23_minus*self.S)))**2 + (s2/self.Yc)**2)*(self.Yc/-s2)
@@ -147,4 +160,3 @@ class Lamina:
         f = (1 / R11) * (s1 - (self.v21 - self.v21f * self.msf * (self.E1 / self.E11f)) * s2)
         return f
 
-# We need a way to update the laminate properties based on the failure state of the Lamina
