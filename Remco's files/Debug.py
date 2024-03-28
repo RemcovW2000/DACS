@@ -25,46 +25,39 @@ S = 132.8       # From assignment
 
 failureproperties = [E11f, v21f, msf, R11t, R11c, yt, yc, S]
 s0 = Lamina(0.25, 0, elasticproperties, failureproperties)
-# s1 = Lamina(0.25, 90, elasticproperties, failureproperties)
-# s2 = Lamina(0.25, 45, elasticproperties, failureproperties)
-# s3 = Lamina(0.25, -45, elasticproperties, failureproperties)
-# s4 = Lamina(0.25, -45, elasticproperties, failureproperties)
-# s5 = Lamina(0.25, 45, elasticproperties, failureproperties)
-# s6 = Lamina(0.25, 90, elasticproperties, failureproperties)
-# s7 = Lamina(0.25, 0, elasticproperties, failureproperties)
-# s8 = Lamina(0.25, 0, elasticproperties, failureproperties)
-# s9 = Lamina(0.25, 90, elasticproperties, failureproperties)
-# s10 = Lamina(0.25, 45, elasticproperties, failureproperties)
-# s11 = Lamina(0.25, -45, elasticproperties, failureproperties)
-# s12 = Lamina(0.25, -45, elasticproperties, failureproperties)
-# s13 = Lamina(0.25, 45, elasticproperties, failureproperties)
-# s14 = Lamina(0.25, 90, elasticproperties, failureproperties)
-# s15 = Lamina(0.25, 0, elasticproperties, failureproperties)
+s1 = Lamina(0.25, 90, elasticproperties, failureproperties)
+s2 = Lamina(0.25, 45, elasticproperties, failureproperties)
+s3 = Lamina(0.25, -45, elasticproperties, failureproperties)
+s4 = Lamina(0.25, -45, elasticproperties, failureproperties)
+s5 = Lamina(0.25, 45, elasticproperties, failureproperties)
+s6 = Lamina(0.25, 90, elasticproperties, failureproperties)
+s7 = Lamina(0.25, 0, elasticproperties, failureproperties)
+s8 = Lamina(0.25, 0, elasticproperties, failureproperties)
+s9 = Lamina(0.25, 90, elasticproperties, failureproperties)
+s10 = Lamina(0.25, 45, elasticproperties, failureproperties)
+s11 = Lamina(0.25, -45, elasticproperties, failureproperties)
+s12 = Lamina(0.25, -45, elasticproperties, failureproperties)
+s13 = Lamina(0.25, 45, elasticproperties, failureproperties)
+s14 = Lamina(0.25, 90, elasticproperties, failureproperties)
+s15 = Lamina(0.25, 0, elasticproperties, failureproperties)
 
 # create the laminas list, for the laminate function:
-# laminas = [s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15]
-laminas = [s0]
+laminas = [s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15]
+
 # creating the laminate object:
 laminate = Laminate(laminas)
-
-loadingratio = np.array([[0],
-                         [1],
-                         [1],
-                         [0],
-                         [0],
-                         [0]])
 
 
 E22vsE12FPF, E22vsE12LPF, S22vsS12FPF, S22vsS12LPF = laminate.ProduceFailureEnvelope()
 
 # Unzip the list of tuples into two lists, x and y
 Fx, Fy = zip(*S22vsS12FPF)
-Lx, Ly = zip(*S22vsS12LPF)
+Lt, Ls = zip(*S22vsS12LPF)
 
 # Plotting
 plt.figure(figsize=(10, 6))
-plt.scatter(Lx, Ly, marker='o', color='blue')
-# plt.scatter(Fx, Fy, marker='o', color='red')
+plt.scatter(Lt, Ls, marker='o', color='blue')
+plt.scatter(Fx, Fy, marker='o', color='red')
 
 plt.title('Plot of List of Tuples')
 plt.xlabel('X values')

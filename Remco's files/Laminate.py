@@ -126,7 +126,7 @@ class Laminate:
             stresses[:, count] = stressesflat
         return stresses
 
-    #c arry out failure analysis for all lamina in laminate
+    # carry out failure analysis for all lamina in laminate
     def FailureAnalysis(self):
         # We need to make sure the lamina have stresses:
         self.StressAnalysis()
@@ -137,49 +137,12 @@ class Laminate:
         newfailurestate = np.zeros(len(self.laminas))
         for count, lamina in enumerate(self.laminas):
             # Now run for the lamina, the failure analysis
-            if lamina.FailureAnalysis(lamina.Sigma) == 1:
+            if lamina.FailureAnalysis(lamina.Sigma)[0] == 1:
                 failedlamina.append(count)
 
             # set the correct index of the failurestate:
             self.FailureState[count] = lamina.FailureState
         return self.FailureState, failedlamina
-
-    # def ProgressiveDamageAnalysis(self, loadingratio, loadincrement):
-    #     # We want to expose the laminate to a loading ratio, given as a numpy array
-    #     # for example: np.array([[800], [70], [0], [0], [0], [0]])
-    #     # We then want to normalize the list and apply loads in the ratio of the list
-    #     normalized_loadingratio = loadingratio / np.max(np.abs(loadingratio))
-    #     # We can save the point of FPF and LPF for later plotting
-    #     LPF = False
-    #
-    #     # Initialize the failure loads and strains:
-    #     FailureLoads = []
-    #     FailureStrains = []
-    #
-    #     # Now we loop through the load increments until we reach last ply failure
-    #     n = 0
-    #     while LPF == False:
-    #         # First we calculate the load for this iteration:
-    #         Loads = normalized_loadingratio * n * loadincrement
-    #         self.Loads = Loads
-    #
-    #         # Then we run the actual failure analysis for the laminate, which also returns the failure state of the laminate:
-    #         FailureState, failedlamina = self.FailureAnalysis()
-    #
-    #         # Now if failedlamina is not empty, a lamina has failed so we save these loads and strains:
-    #         if failedlamina:
-    #             print('failure detected')
-    #             FailureLoads = np.append(FailureLoads, Loads, axis = 1)
-    #             # print('failure loads:', Loads)
-    #             FailureStrains = np.append(FailureStrains, self.GetStrains(), axis = 1)
-    #             # print('failure strains', np.round(self.GetStrains(), 1))
-    #
-    #         # Then we check whether we achieved full failure of all the lamina:
-    #         if np.all(FailureState >= 1):
-    #             LPF = True
-    #
-    #         n += 1
-    #     return FailureLoads, FailureStrains
 
     def ProgressiveDamageAnalysis(self, loadingratio, loadincrement):
         # Normalize the loading ratio
@@ -238,14 +201,19 @@ class Laminate:
                                      [0],
                                      [0]])
 
-            FailureLoads, FailureStrains = self.ProgressiveDamageAnalysis(loadingratio, 2)
+            FailureLoads, FailureStrains = self.ProgressiveDamageAnalysis(loadingratio, 1)
+
 
             # We save the individual points as tuples: This is for one load case:
             E22vsE12 = tuple(zip(FailureStrains[1], FailureStrains[2]))
+
+            # now we save the FPF and LPF:
             E22vsE12FPF.append(E22vsE12[0])
             E22vsE12LPF.append(E22vsE12[-1])
 
             S22vsS12 = tuple(zip(FailureLoads[1], FailureLoads[2]))
+
+            # Here we again take the FPF and LPF
             S22vsS12FPF.append(S22vsS12[0])
             S22vsS12LPF.append(S22vsS12[-1])
             self.ResetFailureState()

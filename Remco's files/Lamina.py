@@ -119,8 +119,10 @@ class Lamina:
             # print('failure criteria > 1.1, load increment too big! Failurestate = ', self.FailureState, 'with factor (IFF, FF)', IFFfactor, FFfactor)
             pass
         self.FailureState += failure
-        return failure
+        return failure, IFFfactor, FFfactor
 
+    # This function does inter fiber failure analysis
+    # It does not alter anything about the failure state of the material
     def IFF(self, sigma):
         s1 = sigma[0]
         s2 = sigma[1]
@@ -134,22 +136,27 @@ class Lamina:
         # Now we have done that first check so we can make the criteria:
 
         # Intermediary values:
-        s23A = (self.S / (2 * 0.2)) * (np.sqrt(1 + 2 * 0.2 * self.Yc / self.S) - 1)
         p12_minus = 0.25
+        s23A = (self.S / (2 * p12_minus)) * (np.sqrt(1 + 2 * p12_minus * self.Yc / self.S) - 1)
         p23_minus = p12_minus * s23A / self.S  # p12(-)????
         s12c = self.S * np.sqrt(1 + 2 * p23_minus)
 
         # Mode A:
         if s2 >= 0:
-            f = np.sqrt((s6 / self.S) ** 2 + (1 - self.p12 * self.Yt / self.S) ** 2 * (s2 / self.Yt) ** 2) + 0.3 * s2 / self.S
+            f = np.sqrt((s6 / self.S)**2 + (1 - self.p12 * self.Yt / self.S)**2 * (s2 / self.Yt)**2) + 0.3 * s2 / self.S
         # Now if s2 < 0 then it could be either mode b or mode c, which we check:
-        elif abs(s2 / (abs(s6) + 1e-11)) <= s23A / abs(s12c) and abs(s2 / (abs(s6) + 1e-11)) >= 0:
+        elif abs(s2 / (abs(s6) + 1e-11)) <= (s23A / abs(s12c)) and abs(s2 / (abs(s6) + 1e-11)) >= 0:
             # In the above line the following code: (abs(s6) + 1e-11) functions to prevent a div by zero error
             f = (np.sqrt(s6 ** 2 + (p12_minus * s2) ** 2) + p12_minus * s2) / self.S
         else:
-            f = ((s6/(2*(1 + p23_minus*self.S)))**2 + (s2/self.Yc)**2)*(self.Yc/-s2)
+            term1 = (s6/(2*(1 + p23_minus)* self.S))
+            term2 = s2/self.Yc
+            f = (term1**2 + term2**2)*(self.Yc/-s2)
         return f
 
+
+    # This function does fiber failure analysis
+    # It does not alter anything about the failure state of the material
     def FF(self, sigma):
         s1 = sigma[0]
         s2 = sigma[1]
