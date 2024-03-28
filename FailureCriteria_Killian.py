@@ -1,6 +1,28 @@
 import numpy as np
+from uncertainties import ufloat
 
 np.set_printoptions(linewidth=300, precision = 3)
+
+def MaxStressFailure(stress, material): # stress = np.array with s1,s2,s6 ; mat_properties with [Xt,Xc,Yt,Yc,S]
+    Xt, Xc, Yt, Yc, S = material.strengths
+    s1, s2, s6        = stress
+
+    if s1 < 0:
+        FI1 = abs(s1)/Xc
+    else:
+        FI1 = abs(s1)/Xt
+
+    if s2 < 0:
+        FI2 = abs(s2)/Yc
+    else:
+        FI2 = abs(s2)/Yt
+
+    FI3 = abs(s6)/abs(S)
+
+    FI = {'FI1':FI1[0], 'FI2':FI2[0], 'FI3':FI3[0]} 
+
+    return FI
+
 
 def FibreFailure(stress, material): # stress = np.array with s1,s2,s6 ; mat_properties with [Xt,Xc,Yt,Yc,S]
     print('Fibre Failure')

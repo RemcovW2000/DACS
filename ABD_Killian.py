@@ -1,17 +1,19 @@
 import numpy as np
 import copy
+import uncertainties
+from uncertainties import ufloat
 
 np.set_printoptions(linewidth=300, precision = 3)
 
 class Material:
     def __init__(self, material, E1, E2, G12, v12, v21, strengths, v21_fiber, E1_fiber):
         self.material = material             # string
-        self.E1        = E1                  # GPa
-        self.E2        = E2                  # GPa
-        self.G12       = G12                 # GPa
+        self.E1        = E1                  # MPa
+        self.E2        = E2                  # MPa
+        self.G12       = G12                 # MPa
         self.v12       = v12                 # -
-        self.v21       = self.get_v21()      # - 
-        self.strengths = strengths # np.array([Xt, Xc, Yt, Yc, S]) # GPa 
+        self.v21       = self.u_get_v21() #self.get_v21()      # - 
+        self.strengths = strengths # np.array([Xt, Xc, Yt, Yc, S]) # MPa 
         self.v21_fibre = v21_fiber
         self.E1_fibre  = E1_fiber 
 
@@ -19,8 +21,10 @@ class Material:
         v21 = self.v12*self.E2/self.E1
         return v21
     
+    u_get_v21 = uncertainties.wrap(get_v21)
+    
 class Lamina:
-    def __init__(self, material, thickness, orientation, Q, z0, z1, strains, stresses):
+    def __init__(self, material, thickness, orientation, Q, z0, z1, strains, stresses, failure_state):
         self.material    =  material    # Material object
         self.thickness   =  thickness   # thickness layers
         self.orientation =  orientation # orientation in layup 
@@ -29,7 +33,7 @@ class Lamina:
         self.z1          =  z1   
         self.strains     =  strains     # contains strains and curvatures
         self.stresses    =  stresses    # axial stresses due to axial loads and bending
-
+        self.failure_state = failure_state
 class Layup:
     def __init__(self, lay_up, symmetry, thickness):
         self.lay_up          = lay_up           # np.array as in [0,90] from [0,90]_s, 
@@ -55,15 +59,16 @@ class Layup:
 
     
 class Laminate:
-    def __init__(self, type, lay_up, laminae, A, B, D, ABD, abd, Ex, Ey, Gxy, vxy, vyx):
+    def __init__(self, type, lay_up, laminae, A, B, D, ABD, abd, Ex, Ey, Gxy, vxy, vyx, stresses,strains):
         self.type    = type           # string
-        self.lay_up  = lay_up         # np.array
+        self.lay_up  = lay_up         # list
         self.laminae = laminae        # Lamina objects
         self.A, self.B, self.D        = A, B, D
         self.ABD     = ABD            # strains to force/moment intensities
         self.abd     = abd            # force/moment intensities to strains (useful one)
         self.Ex, self.Ey, self.Gxy, self.vxy, self.vyx     = Ex, Ey, Gxy, vxy, vyx             #EQUIVALENT PROPERTIES
- 
+        self.stresses = stresses      # 
+        self.strains  = strains       # 
 def GenerateLaminate(lamina, lay_up, laminate): #, laminae):
     laminae = []
     # generating laminae orientations based upon specified lay-up 
@@ -99,6 +104,9 @@ def Q_matrix(E1,E2,G12,v12,v21, theta):
 def ABD_Matrix(lay_up,laminate):
     # calculating A, B, D using every lamina
     t = lay_up.total_thickness
+    laminate.A =  np.zeros((3,3) ,dtype='O')
+    laminate.B =  np.zeros((3,3) ,dtype='O')
+    laminate.D =  np.zeros((3,3) ,dtype='O')
 
     for i, lamina in enumerate(laminate.laminae):
         E1, E2, G12, v12, v21 = lamina.material.E1, lamina.material.E2, lamina.material.G12, lamina.material.v12, lamina.material.v21
@@ -117,21 +125,23 @@ def ABD_Matrix(lay_up,laminate):
         # add thickness to get zk
         z1 = z0 + lamina.thickness
         lamina.z1 = z1
-
+        #print(type(test[0][0].dtype))
+        #print(type(laminate.A[0][0].dtype))
         laminate.A += lamina.Q*(z1 - z0)
         laminate.B += lamina.Q*(z1**2 - z0**2)/2 * (-1)    # SIGN WAS RESERVED SOMEHOW?
         laminate.D += lamina.Q*(z1**3 - z0**3)/3
-
+    
         # equivalent properties
-        Axx, Ayy, Axy, Ass = laminate.A[0][0], laminate.A[1][1], laminate.A[0][1], laminate.A[2][2]
-        A = Axx*Ayy - Axy**2
-        laminate.Ex, laminate.Ey   = A/(t*Ayy), A/(t*Axx)
-        laminate.Gxy               = Ass/t
-        laminate.vxy, laminate.vyx = Axy/Ayy, Axy/Axx
+    Axx, Ayy, Axy, Ass = laminate.A[0][0], laminate.A[1][1], laminate.A[0][1], laminate.A[2][2]
+    A = Axx*Ayy - Axy**2
+    laminate.Ex, laminate.Ey   = A/(t*Ayy), A/(t*Axx)
+    laminate.Gxy               = Ass/t
+    laminate.vxy, laminate.vyx = Axy/Ayy, Axy/Axx
 
     # building full ABD matrix
     laminate.ABD = np.block([[laminate.A, laminate.B],[laminate.B, laminate.D]])
-
+    laminate.ABD = laminate.ABD.astype('float64')
+    print(type(laminate.ABD[0][0]))
 # result of epsilon = abd @ F is strain for full laminate in direction 
 # of loading. To ensure continuity, perfect bonding is assumed, therefore
 # each ply undergoes equal strain in direction of loading.
