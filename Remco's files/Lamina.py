@@ -1,8 +1,9 @@
 import numpy as np
 class Lamina:
-    def __init__(self, t, theta, elasticproperties, failureproperties = None, z0=None, z1=None, Sigma = None, Epsilon = None, FailureState = 0):
-        # elasticproperties format: [E1, E2, G12, v12]
-        # failureproperties format: [E11f, v21f, msf, R11t, R11c]
+    def __init__(self, t, theta, elasticproperties, statisticalproperties = None, failureproperties = None, z0=None, z1=None, Sigma = None, Epsilon = None, FailureState = 0):
+        # elasticproperties format:     [E1, E2, G12, v12]
+        # failureproperties format:     [E11f, v21f, msf, R11t, R11c]
+        # statisticalproperties format: [E1, E2, v12, G12, Xt, Xc, Yt, Yc, S] all standard deviations
         # Damagrpropagation:
         # [0.1, 0, 0.1, 0.1] for failurestate 1
         # [0, 0, 0, 0] for failurestate 2
@@ -24,12 +25,14 @@ class Lamina:
         self.ElasticPropertiesCurrent = self.DamageProgression[self.FailureState] * self.ElasticProperties
 
         # Now we define the elastic properties in case we want to call them right after initialisation
+        self.elasticproperties = elasticproperties
         self.E1 = self.ElasticPropertiesCurrent[0]     # Modulus of elasticity in material direction 1
         self.E2 = self.ElasticPropertiesCurrent[1]     # Modulus of elasticity in material direction 2
         self.G12 = self.ElasticPropertiesCurrent[2]    # Shear modulus in plane 12
         self.v12 = self.ElasticPropertiesCurrent[3]    # Poisson's ratio in plane 12
 
         # failure properties
+        self.failureproperties = failureproperties
         self.E11f = failureproperties[0]   # fiber E11
         self.v21f = failureproperties[1]   # fiber v21
         self.msf = failureproperties[2]    # compensation factor, msf = 1.3 for GFRP, msf = 1.1 for CFRP
@@ -40,7 +43,7 @@ class Lamina:
         self.S = failureproperties[7]
         self.p12 = 0.3
 
-
+        # Failure states:
         self.Epsilon = Epsilon
         self.Sigma = Sigma
         self.FailureStresses = []
@@ -50,10 +53,6 @@ class Lamina:
 
     def CalculateQS(self):
         # # If the failure state is 1 or above for now just remove the elastic properties
-        # if self.FailureState > 0:
-        #     self.Q = np.zeros((3, 3))
-        #     self.Smatrix = np.full((3, 3), 1e10)
-        #     return
 
         # Based on the failurestate, we should take different values for the elastic properties:
         self.ElasticPropertiesCurrent = self.DamageProgression[self.FailureState] * self.ElasticProperties
@@ -115,25 +114,18 @@ class Lamina:
             self.FailureStresses.append(sigma123)
         else:
             failure = 0
-        if IFFfactor >= 1.1 or FFfactor >= 1.1:
-            # print('failure criteria > 1.1, load increment too big! Failurestate = ', self.FailureState, 'with factor (IFF, FF)', IFFfactor, FFfactor)
-            pass
+
+        # Modify the failure state based on whether failure is achieved or not
         self.FailureState += failure
+
+        # We'll return the actual factor as well, so we can use it to find the next loadstep:
         return failure, IFFfactor, FFfactor
 
     # This function does inter fiber failure analysis
     # It does not alter anything about the failure state of the material
     def IFF(self, sigma):
-        s1 = sigma[0]
         s2 = sigma[1]
         s6 = sigma[2]
-
-        # We are looking for IFF or inter fiber fracture -> matrix failure due to normal stress in 2 direction
-        # or shear stress in 21 or 23 direction (s6). This means we only want to look at this if
-        # s2 and s6 are nonzero
-        if s2 == 0 and s6 == 0:
-            return 0
-        # Now we have done that first check so we can make the criteria:
 
         # Intermediary values:
         p12_minus = 0.25

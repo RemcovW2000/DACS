@@ -18,9 +18,9 @@ E11f = 500000   # TBD
 v21f = 0.1      # TBD
 msf = 1.1       # TBD
 R11t = 1932     # From assignment
-R11c = 1932     # TBD
+R11c = 1480     # From assignment
 yt = 108        # From assignment
-yc = 108        # TBD
+yc = 220        # From assignment
 S = 132.8       # From assignment
 
 failureproperties = [E11f, v21f, msf, R11t, R11c, yt, yc, S]
@@ -48,19 +48,20 @@ laminas = [s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15]
 laminate = Laminate(laminas)
 
 
-E22vsE12FPF, E22vsE12LPF, S22vsS12FPF, S22vsS12LPF = laminate.ProduceFailureEnvelope()
+E22vsE12FPF, E22vsE12LPF, S22vsS12FPF, S22vsS12LPF = laminate.ProduceFailureEnvelope(0.1)
 
 # Unzip the list of tuples into two lists, x and y
 Fx, Fy = zip(*S22vsS12FPF)
-Lt, Ls = zip(*S22vsS12LPF)
+Lx, Ly = zip(*S22vsS12LPF)
 
 # Plotting
 plt.figure(figsize=(10, 6))
-plt.scatter(Lt, Ls, marker='o', color='blue')
-plt.scatter(Fx, Fy, marker='o', color='red')
+plt.plot(Lx, Ly, color='red')
+plt.plot(Fx, Fy, color='blue')
 
-plt.title('Plot of List of Tuples')
+plt.title('FPF and LPF stresses')
 plt.xlabel('X values')
 plt.ylabel('Y values')
 plt.grid(True)
+plt.axis('equal')
 plt.show()

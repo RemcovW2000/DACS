@@ -42,8 +42,8 @@ s14 = Lamina(0.25, 90, elasticproperties, failureproperties)
 s15 = Lamina(0.25, 0, elasticproperties, failureproperties)
 
 # create the laminas list, for the laminate function:
-# laminas = [s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15]
-laminas = [s0]
+laminas = [s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15]
+# laminas = [s0]
 # creating the laminate object:
 laminate = Laminate(laminas)
 

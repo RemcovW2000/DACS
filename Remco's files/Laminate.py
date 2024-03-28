@@ -1,7 +1,6 @@
 import numpy as np
 from tqdm import tqdm
 class Laminate:
-
     def __init__(self, laminas, Loads=None, Strains=None):
         self.laminas = laminas  # the layers have an order and a thickness, so find the thickness of laminate
         self.FailureState = np.zeros(len(self.laminas))
@@ -133,16 +132,24 @@ class Laminate:
 
         # We make an array to track the failed lamina (which one failed):
         failedlamina = []
+
+        # Initializing an array to save the failure factors:
+        FailureFactors = []
         # New failure state:
         newfailurestate = np.zeros(len(self.laminas))
         for count, lamina in enumerate(self.laminas):
             # Now run for the lamina, the failure analysis
-            if lamina.FailureAnalysis(lamina.Sigma)[0] == 1:
+            results = lamina.FailureAnalysis(lamina.Sigma)
+            if results[0] == 1:
                 failedlamina.append(count)
 
             # set the correct index of the failurestate:
             self.FailureState[count] = lamina.FailureState
-        return self.FailureState, failedlamina
+            FailureFactors.append(max(results[1], results[2]))
+
+        maxfailurefactor = np.max(FailureFactors)
+
+        return self.FailureState, failedlamina, maxfailurefactor
 
     def ProgressiveDamageAnalysis(self, loadingratio, loadincrement):
         # Normalize the loading ratio
@@ -153,14 +160,14 @@ class Laminate:
         FailureLoadsList = []
         FailureStrainsList = []
 
-        n = 0
+        n = 1
         while not LPF:
             # Calculate the load for this iteration
             Loads = normalized_loadingratio * n * loadincrement
             self.Loads = Loads
 
             # Run the failure analysis for the laminate
-            FailureState, failedlamina = self.FailureAnalysis()
+            FailureState, failedlamina, maxfailurefactor = self.FailureAnalysis()
 
             # If a lamina has failed, save these loads and strains
             if failedlamina:
@@ -171,7 +178,12 @@ class Laminate:
             if np.all(FailureState >= 1):
                 LPF = True
 
-            n += 1
+            if maxfailurefactor < 0.999:
+                # The load should be increased based on the max failure factor observed:
+                nnew = n*(1/maxfailurefactor)*0.999 + 1
+                n = nnew
+            else:
+                n += 1
 
         # Convert lists to NumPy arrays for final output
         # If lists are empty, initialize arrays as (n,0) to avoid shape mismatch
@@ -184,9 +196,9 @@ class Laminate:
 
         return FailureLoads, FailureStrains
 
-    def ProduceFailureEnvelope(self):
+    def ProduceFailureEnvelope(self, loadincrement):
         # We want to plot the stress and strain failure loads:
-        angles = np.linspace(1, 360, 360)
+        angles = np.linspace(1, 360, 3600)
         E22vsE12FPF = []
         E22vsE12LPF = []
 
@@ -201,7 +213,7 @@ class Laminate:
                                      [0],
                                      [0]])
 
-            FailureLoads, FailureStrains = self.ProgressiveDamageAnalysis(loadingratio, 1)
+            FailureLoads, FailureStrains = self.ProgressiveDamageAnalysis(loadingratio, loadincrement)
 
 
             # We save the individual points as tuples: This is for one load case:
@@ -218,10 +230,6 @@ class Laminate:
             S22vsS12LPF.append(S22vsS12[-1])
             self.ResetFailureState()
         return E22vsE12FPF, E22vsE12LPF, S22vsS12FPF, S22vsS12LPF
-
-    def PlotFailureEnvelope(self):
-        pass
-
 
     def ResetFailureState(self):
         # First we reset the failure state vector in the laminate:
