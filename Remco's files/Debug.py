@@ -14,6 +14,7 @@ v12 = 0.31      # From assignment
 
 elasticproperties = [E1, E2, G12, v12]
 
+# properties needed for failure analysis
 E11f = 500000   # TBD
 v21f = 0.1      # TBD
 msf = 1.1       # TBD

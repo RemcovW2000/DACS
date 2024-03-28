@@ -1,6 +1,6 @@
 import numpy as np
 class Lamina:
-    def __init__(self, t, theta, elasticproperties, statisticalproperties = None, failureproperties = None, z0=None, z1=None, Sigma = None, Epsilon = None, FailureState = 0):
+    def __init__(self, t, theta, elasticproperties, failureproperties = None, z0=None, z1=None, Sigma = None, Epsilon = None, FailureState = 0):
         # elasticproperties format:     [E1, E2, G12, v12]
         # failureproperties format:     [E11f, v21f, msf, R11t, R11c]
         # statisticalproperties format: [E1, E2, v12, G12, Xt, Xc, Yt, Yc, S] all standard deviations
@@ -106,6 +106,9 @@ class Lamina:
         sigma123 = alfamatrix @ sigma
         IFFfactor = self.IFF(sigma123)
         FFfactor = self.FF(sigma123)
+
+        #print('IFF factor:', IFFfactor)
+        #print('FF factor:', FFfactor)
 
         if IFFfactor >= 1 or FFfactor >= 1:
             failure = 1
