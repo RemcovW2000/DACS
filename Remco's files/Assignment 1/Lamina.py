@@ -8,7 +8,7 @@ class Lamina:
         # [0.1, 0, 0.1, 0.1] for failurestate 1
         # [0, 0, 0, 0] for failurestate 2
         self.DamageProgression = np.array([[1, 1, 1, 1],
-                                           [0.1, 1e-10, 0.1, 0.1],
+                                           [1, 0.1, 0.1, 0.1],
                                            [1e-10, 1e-10, 1e-10, 1e-10]])
 
         # geometric properties ply
@@ -52,10 +52,11 @@ class Lamina:
         self.CalculateQS()
 
     def CalculateQS(self):
-        # # If the failure state is 1 or above for now just remove the elastic properties
-
         # Based on the failurestate, we should take different values for the elastic properties:
-        self.ElasticPropertiesCurrent = self.DamageProgression[self.FailureState] * self.ElasticProperties
+        if self.FailureState <= 2:
+            self.ElasticPropertiesCurrent = self.DamageProgression[self.FailureState] * self.ElasticProperties
+        else:
+            self.ElasticPropertiesCurrent = [1e-10, 1e-10, 1e-10, 1e-10]
 
         # Now we update the elastic property attributes for later use in failure criteria
         self.E1 = self.ElasticPropertiesCurrent[0]
@@ -98,8 +99,8 @@ class Lamina:
     # Finally, we can carry out failure analysis to figure out whether a lamina has failed:
     def FailureAnalysis(self, sigma):
         # first we rotate the stress vector sigma by -theta -> so back into 123 frame
-        m = np.cos(-self.theta_rad)
-        n = np.sin(-self.theta_rad)
+        m = np.cos(self.theta_rad)
+        n = np.sin(self.theta_rad)
         alfamatrix = np.array([[m**2, n**2, 2*m*n],
                                [n**2, m**2, -2*m*n],
                                [-m*n, m*n, m**2 - n**2]])
@@ -107,11 +108,12 @@ class Lamina:
         IFFfactor = self.IFF(sigma123)
         FFfactor = self.FF(sigma123)
 
-        #print('IFF factor:', IFFfactor)
-        #print('FF factor:', FFfactor)
-
-        if IFFfactor >= 1 or FFfactor >= 1:
+        if IFFfactor >= 1:
             failure = 1
+            self.FailureStresses.append(sigma123)
+
+        elif FFfactor >= 1:
+            failure = 2
 
             # We want to save the stesses at failure of a ply:
             self.FailureStresses.append(sigma123)

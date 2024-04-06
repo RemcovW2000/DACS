@@ -55,6 +55,11 @@ class Laminate:
             [B_matrix, D_matrix]
         ])
 
+        try:
+            self.ABD_matrix_inverse = np.linalg.inv(self.ABD_matrix)
+        except:
+            print('ABD may be singular')
+
     def CalculateStrains(self):
         # First we RECALCULATE the ABD matrix -> this because based on the failurestate of the lamina,
         # They will have different Q matrices
@@ -66,9 +71,10 @@ class Laminate:
         else:
             print('loads is nonetype')
 
+        return self.Strains
+
     def GetStrains(self):
         # This will give strains in the lamina at the 'current' state of the laminate for given loads
-        Strains = np.zeros((6, 1))
         Strains = np.linalg.inv(self.ABD_matrix) @ self.Loads
         return Strains
 
@@ -88,7 +94,6 @@ class Laminate:
         # To calcualte lamina strains we first need global strainsL
         self.CalculateStrains()
 
-
         Strains = self.Strains
         for i in self.laminas:
             # Given the fact that strain is a linear gradient in the laminate, we can find
@@ -107,7 +112,14 @@ class Laminate:
 
         Gxy = self.A_matrix[2, 2] / self.h
 
-        return [Ex, Ey, vxy, vyx, Gxy]
+        D = np.linalg.inv(self.D_matrix)
+
+        E1b = 12/(self.h**3 * D[0,0])
+        E2b = 12/(self.h**3 * D[1,1])
+        G12b = 12 / (self.h ** 3 * D[2,2])
+        v12b = -D[0,1]/D[1,1]
+        v21b = -D[0, 1] / D[0, 0]
+        return [Ex, Ey, vxy, vyx, Gxy], [E1b, E2b, G12b, v12b, v21b]
 
     # implement stress analysis per lamina -> calculate stresses per lamina with Q matrix
     # Since we have laminate epsilon
@@ -135,12 +147,11 @@ class Laminate:
 
         # Initializing an array to save the failure factors:
         FailureFactors = []
-        # New failure state:
-        newfailurestate = np.zeros(len(self.laminas))
+
         for count, lamina in enumerate(self.laminas):
             # Now run for the lamina, the failure analysis
             results = lamina.FailureAnalysis(lamina.Sigma)
-            if results[0] == 1:
+            if results[0] >= 1:
                 failedlamina.append(count)
 
             # set the correct index of the failurestate:
@@ -164,21 +175,22 @@ class Laminate:
         while not LPF:
             # Calculate the load for this iteration
             Loads = normalized_loadingratio * n * loadincrement
+
+            # Set the load attribute
             self.Loads = Loads
 
-            # Run the failure analysis for the laminate
+            # Run the failure analysis for the laminate with this new load
             FailureState, failedlamina, maxfailurefactor = self.FailureAnalysis()
-
             # If a lamina has failed, save these loads and strains
             if failedlamina:
                 FailureLoadsList.append(Loads)
                 FailureStrainsList.append(self.GetStrains())
 
-            # Check whether full failure of all laminae has been achieved
-            if np.all(FailureState >= 1):
+            # Check whether full failure of all lamina has been achieved
+            if np.all(FailureState >= 2):
                 LPF = True
 
-            if maxfailurefactor < 0.999:
+            if maxfailurefactor < 0.998:
                 # The load should be increased based on the max failure factor observed:
                 nnew = n*(1/maxfailurefactor)*0.999 + 1
                 n = nnew
@@ -198,7 +210,7 @@ class Laminate:
 
     def ProduceFailureEnvelope(self, loadincrement):
         # We want to plot the stress and strain failure loads:
-        angles = np.linspace(1, 360, 3600)
+        angles = np.linspace(1, 360, 360)
         E22vsE12FPF = []
         E22vsE12LPF = []
 
@@ -207,8 +219,8 @@ class Laminate:
 
         for angle in tqdm(angles):
             loadingratio = np.array([[0],
-                                     [np.sin(np.deg2rad(angle))],
                                      [np.cos(np.deg2rad(angle))],
+                                     [np.sin(np.deg2rad(angle))],
                                      [0],
                                      [0],
                                      [0]])
@@ -219,12 +231,13 @@ class Laminate:
             # We save the individual points as tuples: This is for one load case:
             E22vsE12 = tuple(zip(FailureStrains[1], FailureStrains[2]))
 
+
             # now we save the FPF and LPF:
             E22vsE12FPF.append(E22vsE12[0])
             E22vsE12LPF.append(E22vsE12[-1])
 
             S22vsS12 = tuple(zip(FailureLoads[1], FailureLoads[2]))
-
+            # print('S22 vs S12 failure loads:', S22vsS12, 'at angle:', angle)
             # Here we again take the FPF and LPF
             S22vsS12FPF.append(S22vsS12[0])
             S22vsS12LPF.append(S22vsS12[-1])

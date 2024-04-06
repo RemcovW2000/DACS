@@ -73,4 +73,7 @@ class MonteCarloSimulation:
         # Example analysis: Count how many simulations resulted in at least one failure
         failures = sum(1 for result in self.results if result > 1)
         print(f"Failures: {failures}/{self.num_simulations}")
+        failure_rate = failures/self.num_simulations
+        print('Failure rate: ', failure_rate*100, '%')
         # Further analysis and plotting can be done here
+        return failures
