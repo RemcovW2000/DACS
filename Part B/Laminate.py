@@ -5,6 +5,7 @@ class Laminate:
         # laminas is a python list of lamina objects, which make up the laminate.
         # The laminate layers are ordened by the order of the list.
         self.laminas = laminas
+        self.Loads   = Loads
 
         # The laminate also has a failure state, which is a list with the failure state of each lamina:
         self.FailureState = np.zeros(len(self.laminas))
