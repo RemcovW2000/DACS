@@ -36,7 +36,7 @@ class Fuselage:
             return None
         
 class Stringer:
-    def __init__(self, Ex):
+    def __init__(self):
         self.area      = 0
         self.location  = 0
         self.sigma     = 0
