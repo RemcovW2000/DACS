@@ -13,7 +13,8 @@ class Stringer:
         self.Ex = 0
         self.Fx = 0
         self.FrameSpacing = 1000
-        self.print = True
+        self.print = False
+        self.rho = 0.00161 # placeholder! although this is the correct value
 
         self.LaminateH = LaminateH
         self.LaminateV = LaminateV
@@ -26,6 +27,7 @@ class Stringer:
         self.CalculateA()
         self.CalculateEx()
         self.FindEIEquivalent()
+        self.Calculatempl()
 
 
 
@@ -38,6 +40,12 @@ class Stringer:
     def CalculateEx(self):
         self.Ex = self.EAtotal/self.area
         return
+
+    def Calculatempl(self):
+        self.mpl = self.rho*self.area
+        if self.print == True:
+            print(self.mpl)
+        return self.mpl
 
     def CalculateEAMembers(self):
         # Vertical member EA:
