@@ -27,7 +27,7 @@ Laminas_a = [a0]
 # create laminate object
 Laminate_a = Laminate(Laminas_a)
 # Skin 1
-Skin_a = Skin(Laminate_a)
+Skin_1 = Skin(Laminate_a)
 
 # --------------------------------------------------
 # Skin 2:
@@ -47,7 +47,7 @@ Laminas_b = [b0]
 # create laminate object
 Laminate_b = Laminate(Laminas_b)
 # Skin 1
-Skin_b = Skin(Laminate_b)
+Skin_2 = Skin(Laminate_b)
 
 # -------------------------------------------------
 # Skin 3:
@@ -66,7 +66,7 @@ Laminas_c = [c0]
 # create laminate object
 Laminate_c = Laminate(Laminas_c)
 # Skin 1
-Skin_c = Skin(Laminate_c)
+Skin_3 = Skin(Laminate_c)
 
 
 
