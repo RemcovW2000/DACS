@@ -22,7 +22,7 @@ class Panel:
         # first ply failure: 
         self.FPFFI = self.FPFanalysis()
         # global buckling:
-        BucklingFI = self.BucklingAnalysis()
+        self.BucklingFI = self.BucklingAnalysis()
 
     def FPFanalysis(self):
         # collecting loads
