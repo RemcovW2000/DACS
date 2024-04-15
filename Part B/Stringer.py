@@ -28,6 +28,7 @@ class Stringer:
         self.FindEIEquivalent()
 
 
+
     def CalculateA(self):
         avertical = self.LaminateV.h * (self.Height - self.LaminateH.h)
         ahorizontal = self.LaminateH.h * self.Width
@@ -98,7 +99,7 @@ class Stringer:
         self.CalculateMemberLoads()
         # 3 failure analyses:
         # 1. First ply failure:
-        self.FPFFIv, FPFFIh = self.FPFanalysis()
+        self.FPFFIv, self.FPFFIh = self.FPFanalysis()
         # Returns 2 factors, one for horizontal, one for vertical laminate
 
         # 2. Global buckling:
@@ -107,10 +108,10 @@ class Stringer:
         # 3.
         self.CripplingFIv, self.CripplingFIh = self.CripplingAnalysis()
 
-
-        if
+        FIs = [self.FPFFIv, self.FPFFIh, self.BucklingFI, self.CripplingFIv, self.CripplingFIh]
+        if any(FI > 1 for FI in FIs):
             self.Failure = True
-        return self.FPFFI
+        return
 
     def BucklingAnalysis(self):
 
