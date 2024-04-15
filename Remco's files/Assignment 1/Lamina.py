@@ -1,13 +1,14 @@
 import numpy as np
 class Lamina:
     def __init__(self, t, theta, elasticproperties, failureproperties = None, z0=None, z1=None, Sigma = None, Epsilon = None, FailureState = 0):
-        # elasticproperties format: [E1, E2, G12, v12]
-        # failureproperties format: [E11f, v21f, msf, R11t, R11c]
+        # elasticproperties format:     [E1, E2, G12, v12]
+        # failureproperties format:     [E11f, v21f, msf, R11t, R11c]
+        # statisticalproperties format: [E1, E2, v12, G12, Xt, Xc, Yt, Yc, S] all standard deviations
         # Damagrpropagation:
         # [0.1, 0, 0.1, 0.1] for failurestate 1
         # [0, 0, 0, 0] for failurestate 2
         self.DamageProgression = np.array([[1, 1, 1, 1],
-                                           [0.1, 1e-10, 0.1, 0.1],
+                                           [1, 0.1, 0.1, 0.1],
                                            [1e-10, 1e-10, 1e-10, 1e-10]])
 
         # geometric properties ply
@@ -24,12 +25,14 @@ class Lamina:
         self.ElasticPropertiesCurrent = self.DamageProgression[self.FailureState] * self.ElasticProperties
 
         # Now we define the elastic properties in case we want to call them right after initialisation
+        self.elasticproperties = elasticproperties
         self.E1 = self.ElasticPropertiesCurrent[0]     # Modulus of elasticity in material direction 1
         self.E2 = self.ElasticPropertiesCurrent[1]     # Modulus of elasticity in material direction 2
         self.G12 = self.ElasticPropertiesCurrent[2]    # Shear modulus in plane 12
         self.v12 = self.ElasticPropertiesCurrent[3]    # Poisson's ratio in plane 12
 
         # failure properties
+        self.failureproperties = failureproperties
         self.E11f = failureproperties[0]   # fiber E11
         self.v21f = failureproperties[1]   # fiber v21
         self.msf = failureproperties[2]    # compensation factor, msf = 1.3 for GFRP, msf = 1.1 for CFRP
@@ -40,7 +43,7 @@ class Lamina:
         self.S = failureproperties[7]
         self.p12 = 0.3
 
-
+        # Failure states:
         self.Epsilon = Epsilon
         self.Sigma = Sigma
         self.FailureStresses = []
@@ -49,14 +52,11 @@ class Lamina:
         self.CalculateQS()
 
     def CalculateQS(self):
-        # # If the failure state is 1 or above for now just remove the elastic properties
-        # if self.FailureState > 0:
-        #     self.Q = np.zeros((3, 3))
-        #     self.Smatrix = np.full((3, 3), 1e10)
-        #     return
-
         # Based on the failurestate, we should take different values for the elastic properties:
-        self.ElasticPropertiesCurrent = self.DamageProgression[self.FailureState] * self.ElasticProperties
+        if self.FailureState <= 2:
+            self.ElasticPropertiesCurrent = self.DamageProgression[self.FailureState] * self.ElasticProperties
+        else:
+            self.ElasticPropertiesCurrent = [1e-10, 1e-10, 1e-10, 1e-10]
 
         # Now we update the elastic property attributes for later use in failure criteria
         self.E1 = self.ElasticPropertiesCurrent[0]
@@ -99,8 +99,8 @@ class Lamina:
     # Finally, we can carry out failure analysis to figure out whether a lamina has failed:
     def FailureAnalysis(self, sigma):
         # first we rotate the stress vector sigma by -theta -> so back into 123 frame
-        m = np.cos(-self.theta_rad)
-        n = np.sin(-self.theta_rad)
+        m = np.cos(self.theta_rad)
+        n = np.sin(self.theta_rad)
         alfamatrix = np.array([[m**2, n**2, 2*m*n],
                                [n**2, m**2, -2*m*n],
                                [-m*n, m*n, m**2 - n**2]])
@@ -108,48 +108,52 @@ class Lamina:
         IFFfactor = self.IFF(sigma123)
         FFfactor = self.FF(sigma123)
 
-        if IFFfactor >= 1 or FFfactor >= 1:
+        if IFFfactor >= 1:
             failure = 1
+            self.FailureStresses.append(sigma123)
+
+        elif FFfactor >= 1:
+            failure = 2
 
             # We want to save the stesses at failure of a ply:
             self.FailureStresses.append(sigma123)
         else:
             failure = 0
-        if IFFfactor >= 1.1 or FFfactor >= 1.1:
-            # print('failure criteria > 1.1, load increment too big! Failurestate = ', self.FailureState, 'with factor (IFF, FF)', IFFfactor, FFfactor)
-            pass
-        self.FailureState += failure
-        return failure
 
+        # Modify the failure state based on whether failure is achieved or not
+        self.FailureState += failure
+
+        # We'll return the actual factor as well, so we can use it to find the next loadstep:
+        return failure, IFFfactor, FFfactor
+
+    # This function does inter fiber failure analysis
+    # It does not alter anything about the failure state of the material
     def IFF(self, sigma):
-        s1 = sigma[0]
         s2 = sigma[1]
         s6 = sigma[2]
 
-        # We are looking for IFF or inter fiber fracture -> matrix failure due to normal stress in 2 direction
-        # or shear stress in 21 or 23 direction (s6). This means we only want to look at this if
-        # s2 and s6 are nonzero
-        if s2 == 0 and s6 == 0:
-            return 0
-        # Now we have done that first check so we can make the criteria:
-
         # Intermediary values:
-        s23A = (self.S / (2 * 0.2)) * (np.sqrt(1 + 2 * 0.2 * self.Yc / self.S) - 1)
         p12_minus = 0.25
+        s23A = (self.S / (2 * p12_minus)) * (np.sqrt(1 + 2 * p12_minus * self.Yc / self.S) - 1)
         p23_minus = p12_minus * s23A / self.S  # p12(-)????
         s12c = self.S * np.sqrt(1 + 2 * p23_minus)
 
         # Mode A:
         if s2 >= 0:
-            f = np.sqrt((s6 / self.S) ** 2 + (1 - self.p12 * self.Yt / self.S) ** 2 * (s2 / self.Yt) ** 2) + 0.3 * s2 / self.S
+            f = np.sqrt((s6 / self.S)**2 + (1 - self.p12 * self.Yt / self.S)**2 * (s2 / self.Yt)**2) + 0.3 * s2 / self.S
         # Now if s2 < 0 then it could be either mode b or mode c, which we check:
-        elif abs(s2 / (abs(s6) + 1e-11)) <= s23A / abs(s12c) and abs(s2 / (abs(s6) + 1e-11)) >= 0:
+        elif abs(s2 / (abs(s6) + 1e-11)) <= (s23A / abs(s12c)) and abs(s2 / (abs(s6) + 1e-11)) >= 0:
             # In the above line the following code: (abs(s6) + 1e-11) functions to prevent a div by zero error
             f = (np.sqrt(s6 ** 2 + (p12_minus * s2) ** 2) + p12_minus * s2) / self.S
         else:
-            f = ((s6/(2*(1 + p23_minus*self.S)))**2 + (s2/self.Yc)**2)*(self.Yc/-s2)
+            term1 = (s6/(2*(1 + p23_minus)* self.S))
+            term2 = s2/self.Yc
+            f = (term1**2 + term2**2)*(self.Yc/-s2)
         return f
 
+
+    # This function does fiber failure analysis
+    # It does not alter anything about the failure state of the material
     def FF(self, sigma):
         s1 = sigma[0]
         s2 = sigma[1]

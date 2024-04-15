@@ -20,8 +20,8 @@ msf = 1.1       # TBD
 R11t = 1932     # From assignment
 R11c = 1932     # TBD
 yt = 108        # From assignment
-yc = 108        # TBD
-S = 132.8       # From assignment
+yc = 108 * (200/48)# TBD
+S = 132.8    # From assignment
 
 failureproperties = [E11f, v21f, msf, R11t, R11c, yt, yc, S]
 s0 = Lamina(0.25, 0, elasticproperties, failureproperties)
@@ -43,28 +43,32 @@ s15 = Lamina(0.25, 0, elasticproperties, failureproperties)
 
 # create the laminas list, for the laminate function:
 laminas = [s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15]
-
+# laminas = [s0]
 # creating the laminate object:
 laminate = Laminate(laminas)
 
 # Making the list of angles:
-angles = np.linspace(1, 360, 5)
+angles = np.linspace(1, 360, 360)
 
 Failure_shear_strains = np.array([])
 Failure_transverse_strains = np.array([])
+
+Failure_shear_loads = np.array([])
+Failure_transverse_loads = np.array([])
+
 
 
 for angle in tqdm(angles):
     # For the angle, we create the loading ratio in which direction we will increment the load:
     loadingratio = np.array([[0],
-                             [np.sin(np.deg2rad(angle))],
                              [np.cos(np.deg2rad(angle))],
+                             [np.sin(np.deg2rad(angle))],
                              [0],
                              [0],
                              [0]])
 
     # Then we calulate the FPF and LPF load:
-    FPF_load, LPF_load, FailureLoads, FailureStrains = laminate.ProgressiveDamageAnalysis(loadingratio, 1)
+    FailureLoads, FailureStrains = laminate.ProgressiveDamageAnalysis(loadingratio, 0.1)
 
     # Finally we have to reset the failurestate of the laminate:
     laminate.ResetFailureState()
@@ -73,14 +77,24 @@ for angle in tqdm(angles):
     Failure_shear_strains = np.append(Failure_shear_strains, FailureStrains[1])
     Failure_transverse_strains = np.append(Failure_transverse_strains, FailureStrains[2])
 
+    Failure_shear_loads = np.append(Failure_shear_loads, FailureLoads[2])
+    Failure_transverse_loads = np.append(Failure_transverse_loads, FailureLoads[1])
+
+
 laminate.PlotFailureEnvelope()
 # Create a scatter plot of the failure strains:
-plt.scatter(Failure_transverse_strains, Failure_shear_strains, color='red', label='strains')
+plt.scatter(Failure_transverse_loads, Failure_shear_loads, color='red', label='strains')
+# Add a horizontal line at y=0
+plt.axhline(y=0, color='r', linestyle='-', label='y=0')
+
+# Add a vertical line at x=5
+plt.axvline(x=0, color='g', linestyle='--', label='x=5')
 
 # Optionally, you can add titles and labels
-plt.title('Failure strains')
-plt.xlabel('shears')
-plt.ylabel('transverses')
+plt.title('Failure loads')
+plt.xlabel('transverse')
+plt.ylabel('shear')
+plt.axis('equal')
 
 # Show the plot
 plt.show()
