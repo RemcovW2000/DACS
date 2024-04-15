@@ -112,7 +112,7 @@ class Stringer:
 
         self.LaminateV.Loads = np.array([self.Nxv, 0, 0, 0, 0, 0])
         self.LaminateH.Loads = np.array([self.Nxh, 0, 0, 0, 0, 0])
-        self
+        self.LaminateV.FailureAnalysis()
         return
 
 
