@@ -122,7 +122,7 @@ class Laminate:
 
     def CalculateEquivalentProperties(self):
         # Here we calculate the engineering constants (or equivalent properties):
-        Ex = (self.A_matrix[0, 0] * self.A_matrix[1, 1] - self.A_matrix[0, 1] ** 2) / (self.h * self.A_matrix[1, 1])
+        self.Ex = (self.A_matrix[0, 0] * self.A_matrix[1, 1] - self.A_matrix[0, 1] ** 2) / (self.h * self.A_matrix[1, 1])
         Ey = (self.A_matrix[0, 0] * self.A_matrix[1, 1] - self.A_matrix[0, 1] ** 2) / (self.h * self.A_matrix[0, 0])
 
         vxy = self.A_matrix[0, 1] / self.A_matrix[1, 1]
@@ -137,7 +137,7 @@ class Laminate:
         G12b = 12 / (self.h ** 3 * D[2,2])
         v12b = -D[0,1]/D[1,1]
         v21b = -D[0, 1] / D[0, 0]
-        return [Ex, Ey, vxy, vyx, Gxy], [E1b, E2b, G12b, v12b, v21b]
+        return [self.Ex, Ey, vxy, vyx, Gxy], [E1b, E2b, G12b, v12b, v21b]
 
 
 

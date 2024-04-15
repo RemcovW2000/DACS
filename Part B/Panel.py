@@ -1,7 +1,6 @@
 
 class Panel:
     def __init__(self):
-        self.thickness = 0 #NOTE: will be assigned according master skin
         self.start     = 0
         self.stop      = 0
         self.length    = 0
