@@ -213,7 +213,7 @@ LaminasHa = [Ha0, Ha1, Ha2, Ha3]
 LaminateHa = Laminate(LaminasHa)
 LaminateVa = Laminate(LaminasVa)
 
-TStringer_a = Stringer(LaminateHa, LaminateVa, 20, 20)
+TStringer_1 = Stringer(LaminateHa, LaminateVa, 20, 20)
 
 # ----------------------------------------------------------------------------------------------
 # Stringer 2:
@@ -242,7 +242,7 @@ LaminateVb = Laminate(LaminasVb)
 LaminasVb = [Vb0, Vb1, Vb2, Vb3, Vb4]
 LaminasHb = [Hb0, Hb1, Hb2, Hb3]
 
-TStringer_b = Stringer(LaminateHb, LaminateVb, 20, 20)
+TStringer_2 = Stringer(LaminateHb, LaminateVb, 20, 20)
 
 # ----------------------------------------------------------------------------------------------
 # Stringer 3:
@@ -271,4 +271,4 @@ LaminateVb = Laminate(LaminasVb)
 LaminasVb = [Vb0, Vb1, Vb2, Vb3, Vb4]
 LaminasHb = [Hb0, Hb1, Hb2, Hb3]
 
-TStringer_c = Stringer(LaminateHb, LaminateVb, 20, 20)
+TStringer_3 = Stringer(LaminateHb, LaminateVb, 20, 20)
