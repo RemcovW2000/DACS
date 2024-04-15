@@ -13,6 +13,7 @@ class Stringer:
         self.Ex = 0
         self.Fx = 0
         self.FrameSpacing = 1000
+        self.print = True
 
         self.LaminateH = LaminateH
         self.LaminateV = LaminateV
@@ -25,6 +26,7 @@ class Stringer:
         self.CalculateA()
         self.CalculateEx()
         self.FindEIEquivalent()
+
 
     def CalculateA(self):
         avertical = self.LaminateV.h * (self.Height - self.LaminateH.h)
@@ -66,7 +68,9 @@ class Stringer:
         noemer = self.EAh + self.EAv
         ybar = teller / noemer
         self.ybar = ybar
-        print('height of the neutral axis: ', np.round(ybar, 2), 'mm')
+
+        if self.print == True:
+            print('height of the neutral axis: ', np.round(ybar, 2), 'mm')
         return ybar
 
     def FindEIEquivalent(self):
@@ -113,7 +117,9 @@ class Stringer:
             FF = 0
         elif self.Fx < 0:
             FF = np.abs(self.Fx/Pcr)
-        print('buckling FF: ', np.round(FF, 2))
+
+        if self.print == True:
+            print('buckling FF: ', np.round(FF, 2))
         return FF
 
     def MemberCripplingAnalysis(self, Laminate, Width):
@@ -133,20 +139,22 @@ class Stringer:
     def CripplingAnalysis(self):
         # First horizontal:
         hwidth = (self.Width-self.LaminateV.h)/2
-        Ncrith = self.MemberCripplingAnalysis(LaminateH, hwidth)
+        Ncrith = self.MemberCripplingAnalysis(self.LaminateH, hwidth)
         if self.Nxh <= 0:
             FIhorizontal = np.abs(self.Nxh/Ncrith)
         elif self.Nxh > 0:
             FIhorizontal = 0
 
         vwidth = (self.Height-self.LaminateH.h)
-        Ncritv = self.MemberCripplingAnalysis(LaminateV, vwidth)
+        Ncritv = self.MemberCripplingAnalysis(self.LaminateV, vwidth)
 
         if self.Nxv <= 0:
             FIvertical = np.abs(self.Nxv/Ncritv)
         elif self.Nxv > 0:
             FIvertical = 0
-        print('FI for crippling, vertical, horizontal: ', np.round(FIvertical,2), np.round(FIhorizontal, 2))
+
+        if self.print == True:
+            print('FI for crippling, vertical, horizontal: ', np.round(FIvertical,2), np.round(FIhorizontal, 2))
         return FIvertical, FIhorizontal
 
     def CalculateMemberLoads(self):
@@ -164,29 +172,90 @@ class Stringer:
 
         FPFFFV = self.LaminateV.FailureAnalysis()[2]
         FPFFFH = self.LaminateH.FailureAnalysis()[2]
-        print('FI for FPF, vertical, horizontal: ', np.round(FPFFFV,2), np.round(FPFFFH, 2))
+
+        if self.print == True:
+            print('FI for FPF, vertical, horizontal: ', np.round(FPFFFV,2), np.round(FPFFFH, 2))
         return FPFFFV, FPFFFH
 
+# ----------------------------------------------------------------------------------------------
+# Stringer 1:
+# ----------------------------------------------------------------------------------------------
 
-V0 = Lamina(MP.t, 45, MP.elasticproperties, MP.failureproperties)
-V1 = Lamina(MP.t, 0, MP.elasticproperties, MP.failureproperties)
-V2 = Lamina(MP.t, 0, MP.elasticproperties, MP.failureproperties)
-V3 = Lamina(MP.t, 0, MP.elasticproperties, MP.failureproperties)
-V4 = Lamina(MP.t, 45, MP.elasticproperties, MP.failureproperties)
+Va0 = Lamina(MP.t, 45, MP.elasticproperties, MP.failureproperties)
+Va1 = Lamina(MP.t, 0, MP.elasticproperties, MP.failureproperties)
+Va2 = Lamina(MP.t, 0, MP.elasticproperties, MP.failureproperties)
+Va3 = Lamina(MP.t, 0, MP.elasticproperties, MP.failureproperties)
+Va4 = Lamina(MP.t, 45, MP.elasticproperties, MP.failureproperties)
 
-H0 = Lamina(MP.t, 0, MP.elasticproperties, MP.failureproperties)
-H1 = Lamina(MP.t, 0, MP.elasticproperties, MP.failureproperties)
-H2 = Lamina(MP.t, 0, MP.elasticproperties, MP.failureproperties)
-H3 = Lamina(MP.t,  45, MP.elasticproperties, MP.failureproperties)
+Ha0 = Lamina(MP.t, 0, MP.elasticproperties, MP.failureproperties)
+Ha1 = Lamina(MP.t, 0, MP.elasticproperties, MP.failureproperties)
+Ha2 = Lamina(MP.t, 0, MP.elasticproperties, MP.failureproperties)
+Ha3 = Lamina(MP.t,  45, MP.elasticproperties, MP.failureproperties)
 
 # create the laminas list, for the laminate function:
-LaminasV = [V0, V1, V2, V3, V4]
-LaminasH = [H0, H1, H2, H3]
+LaminasVa = [Va0, Va1, Va2, Va3, Va4]
+LaminasHa = [Ha0, Ha1, Ha2, Ha3]
 
 # creating the laminate object:
-LaminateH = Laminate(LaminasH)
-LaminateV = Laminate(LaminasV)
+LaminateHa = Laminate(LaminasHa)
+LaminateVa = Laminate(LaminasVa)
 
-TStringer1 = Stringer(LaminateH, LaminateV, 20, 20)
-TStringer1.Fx = -100*9.81
-TStringer1.FailureAnalysis()
+TStringer_a = Stringer(LaminateHa, LaminateVa, 20, 20)
+
+# ----------------------------------------------------------------------------------------------
+# Stringer 2:
+# ----------------------------------------------------------------------------------------------
+
+Vb0 = Lamina(MP.t, 45, MP.elasticproperties, MP.failureproperties)
+Vb1 = Lamina(MP.t, 0, MP.elasticproperties, MP.failureproperties)
+Vb2 = Lamina(MP.t, 0, MP.elasticproperties, MP.failureproperties)
+Vb3 = Lamina(MP.t, 0, MP.elasticproperties, MP.failureproperties)
+Vb4 = Lamina(MP.t, 45, MP.elasticproperties, MP.failureproperties)
+
+Hb0 = Lamina(MP.t, 0, MP.elasticproperties, MP.failureproperties)
+Hb1 = Lamina(MP.t, 0, MP.elasticproperties, MP.failureproperties)
+Hb2 = Lamina(MP.t, 0, MP.elasticproperties, MP.failureproperties)
+Hb3 = Lamina(MP.t,  45, MP.elasticproperties, MP.failureproperties)
+
+# create the laminas list, for the laminate function:
+LaminasVb = [Vb0, Vb1, Vb2, Vb3, Vb4]
+LaminasHb = [Hb0, Hb1, Hb2, Hb3]
+
+# creating the laminate object:
+LaminateHb = Laminate(LaminasHb)
+LaminateVb = Laminate(LaminasVb)
+
+
+LaminasVb = [Vb0, Vb1, Vb2, Vb3, Vb4]
+LaminasHb = [Hb0, Hb1, Hb2, Hb3]
+
+TStringer_b = Stringer(LaminateHb, LaminateVb, 20, 20)
+
+# ----------------------------------------------------------------------------------------------
+# Stringer 3:
+# ----------------------------------------------------------------------------------------------
+
+Vc0 = Lamina(MP.t, 45, MP.elasticproperties, MP.failureproperties)
+Vc1 = Lamina(MP.t, 0, MP.elasticproperties, MP.failureproperties)
+Vc2 = Lamina(MP.t, 0, MP.elasticproperties, MP.failureproperties)
+Vc3 = Lamina(MP.t, 0, MP.elasticproperties, MP.failureproperties)
+Vc4 = Lamina(MP.t, 45, MP.elasticproperties, MP.failureproperties)
+
+Hc0 = Lamina(MP.t, 0, MP.elasticproperties, MP.failureproperties)
+Hc1 = Lamina(MP.t, 0, MP.elasticproperties, MP.failureproperties)
+Hc2 = Lamina(MP.t, 0, MP.elasticproperties, MP.failureproperties)
+Hc3 = Lamina(MP.t,  45, MP.elasticproperties, MP.failureproperties)
+
+# create the laminas list, for the laminate function:
+LaminasVc = [Vc0, Vc1, Vc2, Vc3, Vc4]
+LaminasHc = [Hc0, Hc1, Hc2, Hc3]
+
+# creating the laminate object:
+LaminateHb = Laminate(LaminasHb)
+LaminateVb = Laminate(LaminasVb)
+
+
+LaminasVb = [Vb0, Vb1, Vb2, Vb3, Vb4]
+LaminasHb = [Hb0, Hb1, Hb2, Hb3]
+
+TStringer_c = Stringer(LaminateHb, LaminateVb, 20, 20)
