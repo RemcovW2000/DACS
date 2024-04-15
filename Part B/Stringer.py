@@ -11,13 +11,14 @@ class Stringer:
         self.location = 0
         self.sigma = 0
         self.Ex = 0
+        self.Fx = 0
 
         self.LaminateH = LaminateH
         self.LaminateV = LaminateV
 
         self.Width = Width
         self.Height = Height
-
+        #
         # # At initialisation we assign area and ex!
         # self.CalculateEAMembers()
         # self.CalculateA()
@@ -106,11 +107,12 @@ class Stringer:
     def FPFanalysis(self):
         # Depending on the EA of each member (horizontal or vertical) the load for each
         # Member is calculated:
-        Nxh = self.Fx*(self.EAh/(self.EAv+self.EAh))/self.Width
-        Nxv = self.Fx*(self.EAv/(self.EAv+self.EAh))/(self.Height - self.LaminateH.h)
+        self.Nxh = self.Fx*(self.EAh/(self.EAv+self.EAh))/self.Width
+        self.Nxv = self.Fx*(self.EAv/(self.EAv+self.EAh))/(self.Height - self.LaminateH.h)
 
-        self.LaminateV.Loads = np.array([Nxv, 0, 0, 0, 0, 0])
-        self.LaminateH.Loads = np.array([Nxh, 0, 0, 0, 0, 0])
+        self.LaminateV.Loads = np.array([self.Nxv, 0, 0, 0, 0, 0])
+        self.LaminateH.Loads = np.array([self.Nxh, 0, 0, 0, 0, 0])
+        self
         return
 
 
