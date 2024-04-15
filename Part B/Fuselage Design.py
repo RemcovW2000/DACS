@@ -9,8 +9,11 @@ from Panel import Panel
 from Structural_Idealization import Structural_Idealization
 # ---------------------------------------------------------------------
 # Remco:
-# import stringers
+import Stringer
 # Code
+Stringer_a = Stringer.TStringer_a
+Stringer_b = Stringer.TStringer_b
+Stringer_c = Stringer.TStringer_c
 
 # ---------------------------------------------------------------------
 

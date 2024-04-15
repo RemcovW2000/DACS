@@ -98,14 +98,18 @@ class Stringer:
         self.CalculateMemberLoads()
         # 3 failure analyses:
         # 1. First ply failure:
-        self.FPFFI = self.FPFanalysis()
+        self.FPFFIv, FPFFIh = self.FPFanalysis()
         # Returns 2 factors, one for horizontal, one for vertical laminate
 
         # 2. Global buckling:
         self.BucklingFI = self.BucklingAnalysis()
 
         # 3.
-        self.CripplingFI = self.CripplingAnalysis()
+        self.CripplingFIv, self.CripplingFIh = self.CripplingAnalysis()
+
+
+        if
+            self.Failure = True
         return self.FPFFI
 
     def BucklingAnalysis(self):
