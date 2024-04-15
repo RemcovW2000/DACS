@@ -51,10 +51,12 @@ class MonteCarloSimulation:
             lamina = Lamina(thickness, angle, elastic_properties, failure_properties)
             laminas.append(lamina)
 
-        laminate = Laminate(laminas)
-        laminate.Loads = load
+        laminate = Laminate(laminas) # Creating Laminate object
+        laminate.Loads = load # Assigning load to the laminate
+
+        # Performing failure analysis and storing the maximum failure factor
         failure_state, failed_laminas, maxfailfactor = laminate.FailureAnalysis()
-        self.results.append(maxfailfactor)
+        self.results.append(maxfailfactor)  # Storing the result of the simulation
 
     def run(self, load):
         """
@@ -70,10 +72,10 @@ class MonteCarloSimulation:
         """
         Analyzes and reports the results of the Monte Carlo simulations.
         """
-        # Example analysis: Count how many simulations resulted in at least one failure
+        # Counting how many simulations resulted in at least one failure
         failures = sum(1 for result in self.results if result > 1)
         print(f"Failures: {failures}/{self.num_simulations}")
+        # Calculating and printing the failure rate
         failure_rate = failures/self.num_simulations
         print('Failure rate: ', failure_rate*100, '%')
-        # Further analysis and plotting can be done here
         return failures
