@@ -5,8 +5,8 @@ class Fuselage:
         self.diameter        = diameter
         self.n_joints        = n_joints
         self.n_stringers     = n_stringers
-        self.theta_joints    = self.spacing_joints()
-        self.theta_stringers = self.spacing_stringers()
+        self.theta_joints_array    = self.spacing_joints()
+        self.theta_stringers_array = self.spacing_stringers()
         # physical structural elements
         self.stringers       = []
         self.skins           = []
@@ -23,7 +23,7 @@ class Fuselage:
             theta_joints_array = np.arange(theta_joints, 360, 2*theta_joints)
             return theta_joints_array
         else:
-            return []
+            return np.array([])
         
     def spacing_stringers(self): #NOTE: constant spacing for now
         if self.n_stringers != 0:
@@ -31,5 +31,5 @@ class Fuselage:
             theta_stringers_array = np.arange(theta_stringers, 360, 2*theta_stringers)
             return theta_stringers_array
         else:
-            return []
+            return np.array([]) 
 

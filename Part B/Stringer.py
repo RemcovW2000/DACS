@@ -15,6 +15,7 @@ class Stringer:
         self.FrameSpacing = 1000
         self.print = False
         self.rho = 0.00161 # placeholder! although this is the correct value
+        self.Failure = False
 
         self.LaminateH = LaminateH
         self.LaminateV = LaminateV

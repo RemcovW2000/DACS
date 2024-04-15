@@ -20,7 +20,7 @@ Skin_2     = Skin.Skin_2
 Skin_3     = Skin.Skin_3
 # ---------------------------------------------------------------------
 
-stringers = [Stringer_2, Stringer_3, Stringer_3, Stringer_3, Stringer_2, Stringer_1, Stringer_1, Stringer_1, Stringer_1]
+stringers = [Stringer_2, Stringer_3, Stringer_3, Stringer_3, Stringer_2, Stringer_1, Stringer_1, Stringer_1]
 skins     = [Skin_1, Skin_2, Skin_3, Skin_1]
 # ---------------------------------------------------------------------
 # Killian:
@@ -48,14 +48,14 @@ for stringer in fuselage.stringers:
     failure_stringers.append(stringer.Failure)
     load_stringers.append((stringer.Nxv, stringer.Nxh))
     fpf_stringers.append((stringer.FPFFIv, stringer.FPFFIh)) 
-    buckling_stringers.append((stringer.BucklingFIv, stringer.BucklingFIh))
+    buckling_stringers.append(stringer.BucklingFI)
     crippling_stringers.append((stringer.CripplingFIv, stringer.CripplingFIh))
 
 df_stringers = pd.DataFrame(data_stringers)
 
 for panel in fuselage.panels:
     panel.FailureAnalysis()
-    failure_panels.apppend(panel.Failure)
+    failure_panels.append(panel.Failure)
     load_panels.append((panel.Nx, panel.Ns))
     fpf_panels.append(panel.FPFFI)
     buckling_panels.append(panel.BucklingFI)
