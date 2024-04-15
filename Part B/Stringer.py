@@ -5,7 +5,12 @@ from Lamina import Lamina
 
 
 class Stringer:
-    def __init__(self, Ex, LaminateH = None, LaminateV = None, Width = None, Height = None, Position = np.array([0, 0])):
+    def __init__(self, LaminateH = None, LaminateV = None, Width = None, Height = None, Position = np.array([0, 0])):\
+
+        self.area = 0
+        self.location = 0
+        self.sigma = 0
+        self.Ex = 0
 
         self.LaminateH = LaminateH
         self.LaminateV = LaminateV
@@ -13,16 +18,20 @@ class Stringer:
         self.Width = Width
         self.Height = Height
 
-        # self.CalculateEAMembers()   # This calculates equivalent EA for all the members
+        self.CalculateA()
+        self.CalculateEx()
 
-        self.area = 0
-        self.location = 0
-        self.sigma = 0
-        self.Ex = 0
+    def CalculateA(self):
+        avertical = self.LaminateV.h * (self.Height - self.LaminateH.h)
+        ahorizontal = self.LaminateH.h * self.Width
+        self.area = avertical + ahorizontal
+        return
+
 
     def CalculateEAMembers(self):
         # Vertical member EA:
         Eiv = 1/(self.LaminateV.h * self.LaminateV.ABD_matrix_inverse[0, 0])
+
         # print('Eiv:', Eiv)
         # The width here is the height of the stringer
         bv = self.Height
