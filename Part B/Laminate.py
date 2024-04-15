@@ -27,6 +27,7 @@ class Laminate:
 
         # We calculate the ABD matrix in initialisation
         self.CalculateABD()
+        self.CalculateEquivalentProperties()
 
     def CalculateABD(self):
         # Initialize A_ij as a zero matrix
