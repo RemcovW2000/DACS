@@ -23,4 +23,10 @@ class Fuselage:
         else:
             return None
         
+    def spacing_stringers(self):
+        if self.n_stringers != 0:
+            theta_stringers  = 360/(2*self.n_stringers)
+            return theta_stringers 
+        else:
+            return None
 
