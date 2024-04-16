@@ -4,11 +4,12 @@ import Skin
 
 class Fuselage:
     def __init__(self, diameter, frame_spacing, n_joints, n_stringers):
-        self.diameter        = diameter
-        self.n_joints        = n_joints
-        self.n_stringers     = n_stringers
-        self.theta_joints_array    = self.spacing_joints()
-        self.theta_stringers_array = self.spacing_stringers()
+        self.diameter                  = diameter
+        self.n_joints                  = n_joints
+        self.n_stringers               = n_stringers
+        self.theta_joints_array        = self.spacing_joints()
+        self.theta_stringers_array     = self.spacing_stringers()
+        self.theta_booms_array         = np.array([])
         # physical structural elements
         self.stringers       = []
         self.skins           = []

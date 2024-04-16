@@ -18,7 +18,6 @@ class Panel:
         self.frame_spacing = 0
         self.Failure   = False
 
-
     def FailureAnalysis(self):
         # first ply failure: 
         self.FPFFI = self.FPFanalysis()
@@ -49,7 +48,6 @@ class Panel:
         numerator   = (np.pi**2)*(D11 + 2*(D12 + 2*D66)*(a/b)**2 + D22*(a/b)**4)
         denominator = (a**2)*(2 - 8192/81 * (a*k)**2 / (b*np.pi**2)**2)
         N0          = numerator/(denominator + 1e-20) * min(5 + constant, 5 - constant)
-        print(N0)
         BucklingFI  = self.Nx/N0
         return BucklingFI
         
