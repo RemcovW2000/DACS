@@ -44,6 +44,7 @@ class Stringer:
         return
 
     def Calculatempl(self):
+        self.CalculateA()
         self.mpl = self.rho*self.area
         if self.print == True:
             print(self.mpl)

@@ -3,7 +3,7 @@ import Stringer
 import Skin
 
 class Fuselage:
-    def __init__(self, diameter, frame_spacing, n_joints, n_stringers):
+    def __init__(self, diameter, frame_spacing, n_joints, n_stringers, mass_frame = 50):
         self.diameter                  = diameter
         self.n_joints                  = n_joints
         self.n_stringers               = n_stringers
@@ -19,7 +19,7 @@ class Fuselage:
         self.panels          = []
         # idealized 2nd moment of area
         self.Ixx             = 0
-
+        self.mass_frame = mass_frame # in grams
         self.AssignDiameter()
 
     def AssignDiameter(self):
@@ -44,6 +44,7 @@ class Fuselage:
             return np.array([])
 
     def Calculatempl(self):
+        self.AssignDiameter()
         mpl = 0
 
         for i in self.stringers:
@@ -51,7 +52,8 @@ class Fuselage:
         for i in self.skins:
             mpl += i.Calculatempl()
 
-
+        print('frame spacing:', self.frame_spacing)
+        print(mpl)
         self.mpl = (self.mass_frame + self.frame_spacing * mpl)/self.frame_spacing
 
         return self.mpl

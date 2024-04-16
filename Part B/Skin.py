@@ -11,12 +11,15 @@ class Skin:
         self.stop        = 0
         self.mpl         = 0
         self.rho         = 0.00161
-        self.A           = 0
-        self.Diameter    = 0
+        self.A           = None
+        self.Diameter    = 6000 #mm
         # TODO: think about whether stress needs to be stored here?
-        self.CalculateA()
+
     def CalculateA(self):
-        arcl = self.Diameter * np.pi * (self.stop-self.start)/360
+        theta = self.stop - self.start
+        if theta < 0:
+            theta = self.stop + 360 - self.start
+        arcl = self.Diameter * np.pi * theta/360
         self.A = self.Laminate.h * arcl
         return self.A
     def Calculatempl(self):
@@ -29,27 +32,22 @@ class Skin:
 # Skin 1:
 # --------------------------------------------------
 # create laminate object
-Laminate_a = LaminateBuilder([45, -45, 90, 0 , 0], True, True, 1)
+Laminate_a = LaminateBuilder([45], False, True, 1)
 # Skin 1
 Skin_compression = Skin(Laminate_a)
-
 
 # --------------------------------------------------
 # Skin 2:
 # --------------------------------------------------
 # create laminate object
-Laminate_b = LaminateBuilder([45, -45, 45, -45, 45, -45, 45, -45, 0], True, True, 5)
+Laminate_b = LaminateBuilder([45], False, True, 1)
 # Skin 1
 Skin_shear = Skin(Laminate_b)
-
 
 # -------------------------------------------------
 # Skin 3:
 # -------------------------------------------------
 # create laminate object
-Laminate_c = LaminateBuilder([45, -45, 90, 0 , 0], True, True, 1)
+Laminate_c = LaminateBuilder([45], False, True, 1)
 # Skin 1
 Skin_tension = Skin(Laminate_c)
-
-
-
