@@ -1,4 +1,5 @@
 import numpy as np
+import copy
 import matplotlib.pyplot as plt
 import pandas as pd
 from Fuselage import Fuselage
@@ -16,15 +17,18 @@ Stringer_1 = Stringer.TStringer_1
 Stringer_2 = Stringer.TStringer_2
 Stringer_3 = Stringer.TStringer_3
 Skin_1     = Skin.Skin_1
-Skin_2     = Skin.Skin_1
-Skin_3     = Skin.Skin_1
+Skin_2     = Skin.Skin_2
+Skin_3     = Skin.Skin_3
 # ---------------------------------------------------------------------
 
-stringers = [Stringer_2, Stringer_3, Stringer_3, Stringer_3, Stringer_2, Stringer_1, Stringer_1, Stringer_1]
-skins     = [Skin_1, Skin_2, Skin_3, Skin_1]
+def DeepyCopy(element_list):
+    for i in element_list:
+        i = copy.deepcopy(i)
+    return element_list
+
+stringers = [Stringer_1, Stringer_2]#DeepyCopy(10*[Stringer_1])
+skins     = [Skin_1, Skin_2, Skin_3]#DeepyCopy(4*[Skin_1])
 # ---------------------------------------------------------------------
-# Killian:
-# Code
 # fuselage parameters:
 diameter      = 6e3 # [mm]
 frame_spacing = 2e3 # [mm]
@@ -43,6 +47,10 @@ data_stringers = {'Failure?':failure_stringers, 'Nx_v [N/mm]': load_stringers_v,
                   'Crippling_v': crippling_stringers_v, 'Crippling_h': crippling_stringers_h}
 data_panels    = {'Failure?':failure_panels, 'Nx [N/mm]': load_panels_Nx, 'Ns [N/mm]': load_panels_Ns, 
                   'FPF': fpf_panels, 'Buckling':buckling_panels}
+
+fuselage.Calculatempl
+data_fuselage  = {'MPL': fuselage.MPL}
+df_fuselage    = pd.DataFrame(data_fuselage)
 
 for stringer in fuselage.stringers:
     stringer.FailureAnalysis()
@@ -72,7 +80,59 @@ print(df_stringers)
 print('---------------------------------------------------------------------------------------------------------------------------------')
 print('Panels:')
 print(df_panels)
-print('END------------------------------------------------------------------------------------------------------------------------------')
+print('---------------------------------------------------------------------------------------------------------------------------------')
+print('Fuselage:')
+print(df_fuselage)
+
+def show_structural_elements(ax, theta, color, label, marker):
+    for angle in theta:
+        x_dot = (diameter/2) * np.cos(np.radians(angle))
+        y_dot = (diameter/2) * np.sin(np.radians(angle))
+        if angle == theta[0]:
+            ax.plot(x_dot, y_dot, marker, markersize = 13, color = color, label = label)
+        else:
+            ax.plot(x_dot, y_dot, marker,  markersize = 13, color = color) 
+        offset = 100
+        if angle + 180 < 360:
+            ax.text(x_dot + 3*offset, y_dot + offset, f'{angle + 180:.2f}°', fontsize=8, verticalalignment='bottom', horizontalalignment = 'left')
+        if angle + 180 > 360:
+            ax.text(x_dot + 3*offset, y_dot + offset, f'{angle + 180 - 360:.2f}°', fontsize=8, verticalalignment='bottom', horizontalalignment = 'left')
+
+def show_fuselage(theta_s_array, theta_j_array, theta_b_array):
+    fig, (ax1, ax2) = plt.subplots(1, 2)
+    fig.suptitle('FUSELAGE IDEALIZATION')
+    axes = [ax1, ax2]
+    # Generate circle points
+    theta_circle = np.linspace(0, 2*np.pi, 100)
+    x_circle = diameter/2 * np.cos(theta_circle)
+    y_circle = diameter/2 * np.sin(theta_circle)
+    
+    # Plot circle
+    for ax in axes: 
+        if ax == ax1:
+            label = 'skin'
+        else:
+            label = 'panel'
+        ax.plot(x_circle, y_circle, 'k-', label=label)
+    
+    # Plot Physical Structure
+    if theta_s_array.size > 0:
+        show_structural_elements(ax1, theta_s_array, 'r', label = 'stringers', marker='o')
+    show_structural_elements(ax1, theta_j_array, 'b', label = 'joints', marker='x')
+    # Plot Idealized Structure
+    show_structural_elements(ax2, theta_b_array , 'gray', label = 'booms', marker='o')
+    
+    for ax in axes:
+        ax.set_xlabel('Y')
+        ax.set_ylabel('X')
+        ax.axis('equal')
+        ax.grid(True)
+        ax.legend()
+    ax1.set_title('PHYSICAL FUSELAGE')
+    ax2.set_title('IDEALIZED FUSELAGE')
+    
+    plt.show()
+
+show_fuselage(fuselage.theta_stringers_array, fuselage.theta_joints_array, fuselage.theta_booms_array)
 
 
-# ---------------------------------------------------------------------

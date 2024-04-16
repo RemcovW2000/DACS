@@ -22,40 +22,29 @@ def Structural_Idealization(Mx, Vy, diameter, frame_spacing, stringers, skins):
     fuselage = Fuselage(diameter, frame_spacing, n_j, n_s)   
     fuselage.stringers = stringers
     fuselage.skins     = skins   
-    
-    # stringer_areas   = [400]*n_s # [mm^2] 
-    # skin_thicknesses = [1]*n_j   # [mm]
 
     #NOTE: AFTER THE FIRST LAMINATE DESIGNS, SEPARATE LISTS ARE NEEDED TO ASSIGN SPECIFIC AREAS, MODULI AND THICKNESSES
 
     'Defining all physical elements'
     theta_j_array  = fuselage.theta_joints_array
     theta_s_array  = fuselage.theta_stringers_array
-
-    # theta_j_array = np.arange(theta_j, 360, 2*theta_j) # all joint locations
-    # if theta_s != None:
-    #     theta_s_array = np.arange(theta_s, 360, 2*theta_s) # all stringer locations
-
-    # initialize a stringer and a skin:
-    # if theta_s != None:
-    #     stringer = Stringer(142e3) # E = 142 GPa
-    # skin         = Skin(0.8*142e3)
+    
     # generate all stringers:
     for theta, stringer in zip(theta_s_array, stringers): 
         stringer.location = theta
 
     # generate all skins:
-    for i, (theta, skin) in enumerate(zip(theta_j_array, skins)):
-        skin.start = theta # first skin starts from the first joint onwards
-        if theta != theta_j_array[-1]:
-            skin.stop  = theta_j_array[i + 1]
-        else:
-            skin.stop  = theta_j_array[0]
+    for i, skin in enumerate(skins):
+        skin.start = theta_j_array[i]
+        if i != len(skins) - 1:
+            skin.stop = theta_j_array[i + 1]
+        if i == len(skins) - 1:
+            skin.stop = theta_j_array[0]
 
     'Defining all ideal elements'
 
     theta_b_array = np.sort(np.concatenate((theta_j_array, theta_s_array)))
-
+    fuselage.theta_booms_array = theta_b_array
     
     # initialize a boom and a panel:
     boom  = Boom()
@@ -134,56 +123,6 @@ def Structural_Idealization(Mx, Vy, diameter, frame_spacing, stringers, skins):
         boom.area += panel_1.B_1 + panel_2.B_2
         boom.EA   += panel_1.B_1*panel_1.Ex 
         boom.EA   += panel_2.B_2*panel_2.Ex
-    
-    def show_structural_elements(ax, theta, color, label, marker):
-        for angle in theta:
-            x_dot = (diameter/2) * np.cos(np.radians(angle))
-            y_dot = (diameter/2) * np.sin(np.radians(angle))
-            if angle == theta[0]:
-                ax.plot(x_dot, y_dot, marker, markersize = 13, color = color, label = label)
-            else:
-                ax.plot(x_dot, y_dot, marker,  markersize = 13, color = color) 
-            offset = 100
-            if angle + 180 < 360:
-                ax.text(x_dot + 3*offset, y_dot + offset, f'{angle + 180:.2f}°', fontsize=8, verticalalignment='bottom', horizontalalignment = 'left')
-            if angle + 180 > 360:
-                ax.text(x_dot + 3*offset, y_dot + offset, f'{angle + 180 - 360:.2f}°', fontsize=8, verticalalignment='bottom', horizontalalignment = 'left')
-
-    def show_fuselage():
-        fig, (ax1, ax2) = plt.subplots(1, 2)
-        fig.suptitle('FUSELAGE IDEALIZATION')
-        axes = [ax1, ax2]
-        # Generate circle points
-        theta_circle = np.linspace(0, 2*np.pi, 100)
-        x_circle = diameter/2 * np.cos(theta_circle)
-        y_circle = diameter/2 * np.sin(theta_circle)
-        
-        # Plot circle
-        for ax in axes: 
-            if ax == ax1:
-                label = 'skin'
-            else:
-                label = 'panel'
-            ax.plot(x_circle, y_circle, 'k-', label=label)
-        
-        # Plot Physical Structure
-        if theta_s_array.size > 0:
-            show_structural_elements(ax1, theta_s_array, 'r', label = 'stringers', marker='o')
-        show_structural_elements(ax1, theta_j_array[1:-1], 'b', label = 'joints', marker='x')
-        # Plot Idealized Structure
-        show_structural_elements(ax2, theta_b_array , 'gray', label = 'booms', marker='o')
-        
-        for ax in axes:
-            ax.set_xlabel('Y')
-            ax.set_ylabel('X')
-            ax.axis('equal')
-            ax.grid(True)
-            ax.legend()
-
-        ax1.set_title('PHYSICAL FUSELAGE')
-        ax2.set_title('IDEALIZED FUSELAGE')
-        
-        plt.show()
 
     # calculation equivalent properties:
     Ixx = 0
@@ -308,11 +247,6 @@ def Structural_Idealization(Mx, Vy, diameter, frame_spacing, stringers, skins):
 
         df_booms = pd.DataFrame(data_booms)
         print(df_booms)
-        print('END------------------------------------------------------------------------------------------------------------------------------')
-
-        show_fuselage()
 
     return fuselage 
 
-
-#Structural_Idealization()

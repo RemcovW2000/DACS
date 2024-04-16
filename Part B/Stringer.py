@@ -220,3 +220,4 @@ LaminateH3 = LaminateBuilder([45, -45, 0, 0, 0, 0, 0], True, True, 1)
 LaminateV3 = LaminateBuilder([0, 0, 0, 0, 0, 45, -45], False, False, 1)
 
 TStringer_3 = Stringer(LaminateH3, LaminateV3, 20, 20)
+
