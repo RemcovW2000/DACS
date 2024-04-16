@@ -20,12 +20,10 @@ class Panel:
 
 
     def FailureAnalysis(self):
-        print(self.Laminate)
         # first ply failure: 
         self.FPFFI = self.FPFanalysis()
         # global buckling:
         self.BucklingFI = self.BucklingAnalysis()
-        print(self.FPFFI, self.BucklingFI)
 
         FIs = [self.FPFFI, self.BucklingFI]
         if any(FI > 1 for FI in FIs):

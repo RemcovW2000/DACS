@@ -246,7 +246,7 @@ def Structural_Idealization(Mx, Vy, diameter, frame_spacing, stringers, skins):
         panel.Ns = - panel.q_b 
 
     if summary:
-        print('ELEMENTS SUMMARY ----------------------------------------------------------------------------------------------------------------')
+        print('SUMMARY DISCRETIZATION AND LOAD ANALYSIS ----------------------------------------------------------------------------------------')
         print('Skins: ({})'.format(len(skins)) )
         start_skins, stop_skins, t_skins, Ex_skins  = [], [], [], []
         data_skins = {'Start': start_skins, 'Stop': stop_skins, 'Thickness [mm]': t_skins, 'Ex [GPa]': Ex_skins}
@@ -308,7 +308,7 @@ def Structural_Idealization(Mx, Vy, diameter, frame_spacing, stringers, skins):
 
         df_booms = pd.DataFrame(data_booms)
         print(df_booms)
-        print('END--------------------------------------------------------------------------------')
+        print('END------------------------------------------------------------------------------------------------------------------------------')
 
         show_fuselage()
 
