@@ -1,5 +1,6 @@
 import numpy as np
 from Laminate import Laminate
+from Laminate import LaminateBuilder
 from Lamina import Lamina
 import MP
 
@@ -191,85 +192,31 @@ class Stringer:
             print('FI for FPF, vertical, horizontal: ', np.round(FPFFFV,2), np.round(FPFFFH, 2))
         return FPFFFV, FPFFFH
 
+
 # ----------------------------------------------------------------------------------------------
 # Stringer 1:
 # ----------------------------------------------------------------------------------------------
+# creating the laminate objects:
+LaminateH1 = LaminateBuilder([45, -45, 0, 0, 0, 0, 0], True, True, 1)
+LaminateV1 = LaminateBuilder([0, 0, 0, 0, 0, 45, -45], False, False, 1)
 
-Va0 = Lamina(MP.t, 45, MP.elasticproperties, MP.failureproperties)
-Va1 = Lamina(MP.t, 0, MP.elasticproperties, MP.failureproperties)
-Va2 = Lamina(MP.t, 0, MP.elasticproperties, MP.failureproperties)
-Va3 = Lamina(MP.t, 0, MP.elasticproperties, MP.failureproperties)
-Va4 = Lamina(MP.t, 45, MP.elasticproperties, MP.failureproperties)
+TStringer_1 = Stringer(LaminateH1, LaminateV1, 20, 20)
 
-Ha0 = Lamina(MP.t, 0, MP.elasticproperties, MP.failureproperties)
-Ha1 = Lamina(MP.t, 0, MP.elasticproperties, MP.failureproperties)
-Ha2 = Lamina(MP.t, 0, MP.elasticproperties, MP.failureproperties)
-Ha3 = Lamina(MP.t,  45, MP.elasticproperties, MP.failureproperties)
-
-# create the laminas list, for the laminate function:
-LaminasVa = [Va0, Va1, Va2, Va3, Va4]
-LaminasHa = [Ha0, Ha1, Ha2, Ha3]
-
-# creating the laminate object:
-LaminateHa = Laminate(LaminasHa)
-LaminateVa = Laminate(LaminasVa)
-
-TStringer_1 = Stringer(LaminateHa, LaminateVa, 20, 20)
 
 # ----------------------------------------------------------------------------------------------
 # Stringer 2:
 # ----------------------------------------------------------------------------------------------
-
-Vb0 = Lamina(MP.t, 45, MP.elasticproperties, MP.failureproperties)
-Vb1 = Lamina(MP.t, 0, MP.elasticproperties, MP.failureproperties)
-Vb2 = Lamina(MP.t, 0, MP.elasticproperties, MP.failureproperties)
-Vb3 = Lamina(MP.t, 0, MP.elasticproperties, MP.failureproperties)
-Vb4 = Lamina(MP.t, 45, MP.elasticproperties, MP.failureproperties)
-
-Hb0 = Lamina(MP.t, 0, MP.elasticproperties, MP.failureproperties)
-Hb1 = Lamina(MP.t, 0, MP.elasticproperties, MP.failureproperties)
-Hb2 = Lamina(MP.t, 0, MP.elasticproperties, MP.failureproperties)
-Hb3 = Lamina(MP.t,  45, MP.elasticproperties, MP.failureproperties)
-
-# create the laminas list, for the laminate function:
-LaminasVb = [Vb0, Vb1, Vb2, Vb3, Vb4]
-LaminasHb = [Hb0, Hb1, Hb2, Hb3]
-
 # creating the laminate object:
-LaminateHb = Laminate(LaminasHb)
-LaminateVb = Laminate(LaminasVb)
+LaminateH2 = LaminateBuilder([45, -45, 0, 0, 0, 0, 0], True, True, 1)
+LaminateV2 = LaminateBuilder([0, 0, 0, 0, 0, 45, -45], False, False, 1)
 
-
-LaminasVb = [Vb0, Vb1, Vb2, Vb3, Vb4]
-LaminasHb = [Hb0, Hb1, Hb2, Hb3]
-
-TStringer_2 = Stringer(LaminateHb, LaminateVb, 20, 20)
+TStringer_2 = Stringer(LaminateH2, LaminateV2, 20, 20)
 
 # ----------------------------------------------------------------------------------------------
 # Stringer 3:
 # ----------------------------------------------------------------------------------------------
-
-Vc0 = Lamina(MP.t, 45, MP.elasticproperties, MP.failureproperties)
-Vc1 = Lamina(MP.t, 0, MP.elasticproperties, MP.failureproperties)
-Vc2 = Lamina(MP.t, 0, MP.elasticproperties, MP.failureproperties)
-Vc3 = Lamina(MP.t, 0, MP.elasticproperties, MP.failureproperties)
-Vc4 = Lamina(MP.t, 45, MP.elasticproperties, MP.failureproperties)
-
-Hc0 = Lamina(MP.t, 0, MP.elasticproperties, MP.failureproperties)
-Hc1 = Lamina(MP.t, 0, MP.elasticproperties, MP.failureproperties)
-Hc2 = Lamina(MP.t, 0, MP.elasticproperties, MP.failureproperties)
-Hc3 = Lamina(MP.t,  45, MP.elasticproperties, MP.failureproperties)
-
-# create the laminas list, for the laminate function:
-LaminasVc = [Vc0, Vc1, Vc2, Vc3, Vc4]
-LaminasHc = [Hc0, Hc1, Hc2, Hc3]
-
 # creating the laminate object:
-LaminateHb = Laminate(LaminasHb)
-LaminateVb = Laminate(LaminasVb)
+LaminateH3 = LaminateBuilder([45, -45, 0, 0, 0, 0, 0], True, True, 1)
+LaminateV3 = LaminateBuilder([0, 0, 0, 0, 0, 45, -45], False, False, 1)
 
-
-LaminasVb = [Vb0, Vb1, Vb2, Vb3, Vb4]
-LaminasHb = [Hb0, Hb1, Hb2, Hb3]
-
-TStringer_3 = Stringer(LaminateHb, LaminateVb, 20, 20)
+TStringer_3 = Stringer(LaminateH3, LaminateV3, 20, 20)

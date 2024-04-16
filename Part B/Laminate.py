@@ -1,5 +1,8 @@
 import numpy as np
 from tqdm import tqdm
+from Lamina import Lamina
+import MP
+import copy
 class Laminate:
     def __init__(self, laminas, Loads=None, Strains=None):
         # laminas is a python list of lamina objects, which make up the laminate.
@@ -282,4 +285,35 @@ class Laminate:
         # Lastly, we recalculate the ABD matrix:
         self.CalculateABD()
         return
+
+    def PrintAngles(self):
+        angles = []
+        for lamina in self.laminas:
+            angles.append(lamina.theta)
+        print(angles)
+
+def LaminateBuilder(angleslist,symmetry, copycenter, multiplicity):
+    if symmetry == True:
+        if copycenter == True:
+            angleslist = angleslist + angleslist[-1::-1]
+        elif copycenter == False:
+            angleslist = angleslist + angleslist[-2::-1]
+    elif symmetry == False:
+        angleslist = angleslist
+
+    angleslist = angleslist * multiplicity
+
+    # Define standard lamina:
+    lamina = Lamina(MP.t, 45, MP.elasticproperties, MP.failureproperties)
+    laminas = []
+
+    # populate laminas list:
+    for angle in angleslist:
+        newlamina = copy.deepcopy(lamina)
+        newlamina.theta = angle
+        newlamina.CalculateQS()
+        laminas.append(newlamina)
+
+    laminate = Laminate(laminas)
+    return laminate
 
