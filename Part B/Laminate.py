@@ -318,5 +318,3 @@ def LaminateBuilder(angleslist,symmetry, copycenter, multiplicity):
     laminate = Laminate(laminas)
     return laminate
 
-laminate1 = laminatebuilder([0, 90, 45, -45], True, True, 3)
-laminate1.PrintAngles()
