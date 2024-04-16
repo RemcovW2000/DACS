@@ -200,7 +200,7 @@ class Stringer:
 LaminateH1 = LaminateBuilder([45, -45, 0, 0, 0, 0, 0], True, True, 1)
 LaminateV1 = LaminateBuilder([0, 0, 0, 0, 0, 45, -45], False, False, 1)
 
-TStringer_1 = Stringer(LaminateH1, LaminateV1, 20, 20)
+TStringer_1 = Stringer(LaminateH1, LaminateV1, 20, 60)
 
 
 # ----------------------------------------------------------------------------------------------
@@ -210,7 +210,7 @@ TStringer_1 = Stringer(LaminateH1, LaminateV1, 20, 20)
 LaminateH2 = LaminateBuilder([45, -45, 0, 0, 0, 0, 0], True, True, 1)
 LaminateV2 = LaminateBuilder([0, 0, 0, 0, 0, 45, -45], False, False, 1)
 
-TStringer_2 = Stringer(LaminateH2, LaminateV2, 20, 20)
+TStringer_2 = Stringer(LaminateH2, LaminateV2, 30, 60)
 
 # ----------------------------------------------------------------------------------------------
 # Stringer 3:
@@ -219,4 +219,4 @@ TStringer_2 = Stringer(LaminateH2, LaminateV2, 20, 20)
 LaminateH3 = LaminateBuilder([45, -45, 0, 0, 0, 0, 0], True, True, 1)
 LaminateV3 = LaminateBuilder([0, 0, 0, 0, 0, 45, -45], False, False, 1)
 
-TStringer_3 = Stringer(LaminateH3, LaminateV3, 20, 20)
+TStringer_3 = Stringer(LaminateH3, LaminateV3, 20, 60)

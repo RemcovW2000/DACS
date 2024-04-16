@@ -1,4 +1,6 @@
 import numpy as np
+import Stringer
+import Skin
 
 class Fuselage:
     def __init__(self, diameter, frame_spacing, n_joints, n_stringers):
@@ -17,6 +19,13 @@ class Fuselage:
         # idealized 2nd moment of area
         self.Ixx             = 0
 
+        self.AssignDiameter()
+
+    def AssignDiameter(self):
+        for i in self.skins:
+            i.diameter = self.diameter
+        return
+
     def spacing_joints(self): #NOTE: constant spacing for now
         if self.n_joints != 0:
             theta_joints  = 360/(2*self.n_joints)
@@ -31,5 +40,17 @@ class Fuselage:
             theta_stringers_array = np.arange(theta_stringers, 360, 2*theta_stringers)
             return theta_stringers_array
         else:
-            return np.array([]) 
+            return np.array([])
 
+    def Calculatempl(self):
+        mpl = 0
+
+        for i in self.stringers:
+            mpl += i.Calculatempl()
+        for i in self.skins:
+            mpl += i.Calculatempl()
+
+
+        self.mpl = (self.mass_frame + self.frame_spacing * mpl)/self.frame_spacing
+
+        return self.mpl

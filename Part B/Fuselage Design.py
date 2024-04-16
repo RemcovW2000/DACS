@@ -6,6 +6,7 @@ from Boom import Boom
 #from Skin import Skin 
 from Stringer import Stringer
 from Panel import Panel
+import copy
 from Structural_Idealization import Structural_Idealization
 # ---------------------------------------------------------------------
 # Remco:
@@ -15,13 +16,24 @@ import Skin
 Stringer_1 = Stringer.TStringer_1
 Stringer_2 = Stringer.TStringer_2
 Stringer_3 = Stringer.TStringer_3
-Skin_1     = Skin.Skin_1
-Skin_2     = Skin.Skin_1
-Skin_3     = Skin.Skin_1
+Skin_compression     = Skin.Skin_compression
+Skin_tension     = Skin.Skin_tension
+Skin_shear     = Skin.Skin_shear
 # ---------------------------------------------------------------------
 
-stringers = [Stringer_2, Stringer_3, Stringer_3, Stringer_3, Stringer_2, Stringer_1, Stringer_1, Stringer_1]
-skins     = [Skin_1, Skin_2, Skin_3, Skin_1]
+stringers = [copy.deepcopy(Stringer_2),
+             copy.deepcopy(Stringer_3),
+             copy.deepcopy(Stringer_3),
+             copy.deepcopy(Stringer_3),
+             copy.deepcopy(Stringer_2),
+             copy.deepcopy(Stringer_1),
+             copy.deepcopy(Stringer_1),
+             copy.deepcopy(Stringer_1)]
+
+skins     = [copy.deepcopy(Skin_compression),
+             copy.deepcopy(Skin_shear),
+             copy.deepcopy(Skin_tension),
+             copy.deepcopy(Skin_shear)]
 # ---------------------------------------------------------------------
 # Killian:
 # Code
@@ -33,10 +45,12 @@ Vy = -1.5e6 # [N]
 Mx = -15e9  # [Nmm]
 
 fuselage = Structural_Idealization(Mx, Vy, diameter, frame_spacing, stringers, skins)
+fuselage.Calculatempl()
 
 failure_stringers, load_stringers_v, load_stringers_h, fpf_stringers_v            = [],[],[],[]
 fpf_stringers_h, buckling_stringers, crippling_stringers_v, crippling_stringers_h = [],[],[],[]
 failure_panels, load_panels_Nx, load_panels_Ns, fpf_panels, buckling_panels       = [],[],[],[],[]
+
 
 data_stringers = {'Failure?':failure_stringers, 'Nx_v [N/mm]': load_stringers_v, 'Nx_h [N/mm]': load_stringers_h,  
                   'FPF_v': fpf_stringers_v, 'FPF_h': fpf_stringers_h,'Buckling':buckling_stringers,
