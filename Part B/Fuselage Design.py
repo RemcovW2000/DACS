@@ -22,7 +22,7 @@ Skin_shear     = Skin.Skin_shear
 # ---------------------------------------------------------------------
 
 stringers = [Stringer_2, Stringer_3, Stringer_3, Stringer_3, Stringer_2, Stringer_1, Stringer_1, Stringer_1]
-skins     = [Skin_1, Skin_2, Skin_3, Skin_1]
+skins     = [Skin_compression, Skin_shear, Skin_tension, Skin_shear]
 # ---------------------------------------------------------------------
 # fuselage parameters:
 diameter      = 6e3 # [mm]
