@@ -53,12 +53,9 @@ def Structural_Idealization(Mx, Vy, diameter, frame_spacing, stringers, skins):
             skin.stop  = theta_j_array[0]
 
     'Defining all ideal elements'
-    if theta_s_array and theta_j_array:
-        theta_b_array = np.sort(np.concatenate((theta_j_array, theta_s_array)))
-    if not theta_s_array:
-        theta_b_array = theta_j_array
-    if not theta_j_array:
-        theta_b_array = theta_s_array
+
+    theta_b_array = np.sort(np.concatenate((theta_j_array, theta_s_array)))
+
     
     # initialize a boom and a panel:
     boom  = Boom()
@@ -121,7 +118,7 @@ def Structural_Idealization(Mx, Vy, diameter, frame_spacing, stringers, skins):
     # assigning all booms an area, depending on contribution of skins and stringers:
     for boom in booms:
         # add area contribution if stringer present at boom location
-        if theta_s_array:
+        if theta_s_array.size > 0:
             if boom.location in theta_s_array:
                 stringer_area = stringers[np.where(boom.location == theta_s_array)[0][0]].area
                 stringer_Ex   = stringers[np.where(boom.location == theta_s_array)[0][0]].Ex
@@ -170,7 +167,7 @@ def Structural_Idealization(Mx, Vy, diameter, frame_spacing, stringers, skins):
             ax.plot(x_circle, y_circle, 'k-', label=label)
         
         # Plot Physical Structure
-        if theta_s_array:
+        if theta_s_array.size > 0:
             show_structural_elements(ax1, theta_s_array, 'r', label = 'stringers', marker='o')
         show_structural_elements(ax1, theta_j_array[1:-1], 'b', label = 'joints', marker='x')
         # Plot Idealized Structure
@@ -202,7 +199,7 @@ def Structural_Idealization(Mx, Vy, diameter, frame_spacing, stringers, skins):
         #TODO: NEEDS TO BE FIXED: DONE, VERIFY WITH REMCO
         boom_force = boom.sigma*boom.area
         # distrubiting some stress to stringer
-        if theta_s != None:
+        if theta_s_array.size > 0:
             for stringer in stringers:
                 if boom.location == stringer.location:
                     stringer.Fx    = (stringer.area*stringer.Ex/boom.EA)*boom_force
@@ -218,7 +215,7 @@ def Structural_Idealization(Mx, Vy, diameter, frame_spacing, stringers, skins):
     def ShearFlow(Vy, panel, panel_index):
         for boom in booms:
             if panel.start == boom.location:
-                panel.q_b = (-Vy/Ixx)*(boom.area*np.sin(np.radians(boom.location))*(d/2)) + panels[panel_index - 1].q_b 
+                panel.q_b = (-Vy/Ixx)*(boom.area*np.sin(np.radians(boom.location))*(diameter/2)) + panels[panel_index - 1].q_b 
         
     for i, boom in enumerate(booms):
         AxialStress(Mx, boom, i)
@@ -256,8 +253,8 @@ def Structural_Idealization(Mx, Vy, diameter, frame_spacing, stringers, skins):
         for skin in skins:
             start_skins.append(str(skin.start) + '\u00B0')
             stop_skins.append(str(skin.stop) + '\u00B0')
-            t_skins.append(skin.thickness)
-            Ex_skins.append(skin.Ex/1e3)
+            t_skins.append(skin.Laminate.h)
+            Ex_skins.append(skin.Laminate.Ex/1e3)
 
         df_skins =pd.DataFrame(data_skins)
         print(df_skins)
@@ -279,13 +276,13 @@ def Structural_Idealization(Mx, Vy, diameter, frame_spacing, stringers, skins):
             q_panels.append(round(panel.q_b - q_s0, 3))
             Nx_panels.append(round(panel.Nx, 3))
             Ns_panels.append(round(panel.Ns, 3))
-            Ex_panels.append(panel.Ex/1e3)
+            Ex_panels.append(panel.Laminate.Ex/1e3)
             N_panels.append(round(np.sqrt(panel.Nx**2 + panel.Ns**2), 3))
             
 
         df_panels = pd.DataFrame(data_panels)
         print(df_panels)
-        if theta_s_array:
+        if theta_s_array.size > 0:
             print('---------------------------------------------------------------------------------------------------------------------------------')
             print('Stringers: ({})'.format(len(stringers)) )
             location_stringers, area_stringers, sigma_stringers, Ex_stringers = [],[],[],[] #TODO: CHECK UNITS STRESS: N, mm -> MPa

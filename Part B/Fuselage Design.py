@@ -3,22 +3,25 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from Fuselage import Fuselage
 from Boom import Boom 
-from Skin import Skin 
+#from Skin import Skin 
 from Stringer import Stringer
 from Panel import Panel
 from Structural_Idealization import Structural_Idealization
 # ---------------------------------------------------------------------
 # Remco:
 import Stringer
+import Skin
 # Code
-Stringer_a = Stringer.TStringer_a
-Stringer_b = Stringer.TStringer_b
-Stringer_c = Stringer.TStringer_c
-
+Stringer_1 = Stringer.TStringer_1
+Stringer_2 = Stringer.TStringer_2
+Stringer_3 = Stringer.TStringer_3
+Skin_1     = Skin.Skin_1
+Skin_2     = Skin.Skin_2
+Skin_3     = Skin.Skin_3
 # ---------------------------------------------------------------------
 
-stringers = []
-skins     = []
+stringers = [Stringer_2, Stringer_3, Stringer_3, Stringer_3, Stringer_2, Stringer_1, Stringer_1, Stringer_1]
+skins     = [Skin_1, Skin_2, Skin_3, Skin_1]
 # ---------------------------------------------------------------------
 # Killian:
 # Code
@@ -45,19 +48,26 @@ for stringer in fuselage.stringers:
     failure_stringers.append(stringer.Failure)
     load_stringers.append((stringer.Nxv, stringer.Nxh))
     fpf_stringers.append((stringer.FPFFIv, stringer.FPFFIh)) 
-    buckling_stringers.append((stringer.BucklingFIv, stringer.BucklingFIh))
+    buckling_stringers.append(stringer.BucklingFI)
     crippling_stringers.append((stringer.CripplingFIv, stringer.CripplingFIh))
+
+df_stringers = pd.DataFrame(data_stringers)
 
 for panel in fuselage.panels:
     panel.FailureAnalysis()
-    failure_panels.apppend(panel.Failure)
+    failure_panels.append(panel.Failure)
     load_panels.append((panel.Nx, panel.Ns))
     fpf_panels.append(panel.FPFFI)
     buckling_panels.append(panel.BucklingFI)
 
+df_panels = pd.DataFrame(data_panels)
 
-
-
+print('Stringers:')
+print(df_stringers)
+print('-------------------------------------------------------------------------------')
+print('Panels:')
+print(df_panels)
+print('-------------------------------------------------------------------------------')
 
 
 # ---------------------------------------------------------------------

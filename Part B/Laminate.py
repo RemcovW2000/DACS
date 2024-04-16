@@ -186,7 +186,7 @@ class Laminate:
 
         # We save the maximum failure factor in any of the lamina, to calculate the next loadstep:
         maxfailurefactor = np.max(FailureFactors)
-
+        print(maxfailurefactor)
         return self.FailureState, failedlamina, maxfailurefactor
 
     def ProgressiveDamageAnalysis(self, loadingratio, loadincrement):

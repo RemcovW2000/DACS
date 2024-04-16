@@ -16,20 +16,27 @@ class Panel:
         self.Ex        = 0 #NOTE: will be assigned according master skin
         self.Laminate  = Laminate 
         self.frame_spacing = 0
+        self.Failure   = False
 
 
     def FailureAnalysis(self):
+        print(self.Laminate)
         # first ply failure: 
         self.FPFFI = self.FPFanalysis()
         # global buckling:
         self.BucklingFI = self.BucklingAnalysis()
+        print(self.FPFFI, self.BucklingFI)
+
+        FIs = [self.FPFFI, self.BucklingFI]
+        if any(FI > 1 for FI in FIs):
+            self.Failure = True
 
     def FPFanalysis(self):
         # collecting loads
         self.Laminate.Loads = np.array([self.Nx, 0, self.Ns, 0, 0, 0])
         # FPF analysis
-        self.Laminate.FailureAnalysis()
-        return
+        FPF = self.Laminate.FailureAnalysis()[2]
+        return FPF
 
     def BucklingAnalysis(self):
         # two solutions for Ncrit
@@ -43,7 +50,7 @@ class Panel:
         constant    = np.sqrt(9 + 65536/81 * (a*k)**2 / (b*np.pi**2)**2)
         numerator   = (np.pi**2)*(D11 + 2*(D12 + 2*D66)*(a/b)**2 + D22*(a/b)**4)
         denominator = (a**2)*(2 - 8192/81 * (a*k)**2 / (b*np.pi**2)**2)
-        N0          = numerator/denominator * min(5 + constant, 5 - constant)
+        N0          = numerator/(denominator + 1e-20) * min(5 + constant, 5 - constant)
         BucklingFI  = self.Nx/N0
         return BucklingFI
         

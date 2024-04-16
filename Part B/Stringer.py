@@ -16,6 +16,7 @@ class Stringer:
         self.FrameSpacing = 1000
         self.print = False
         self.rho = 0.00161 # placeholder! although this is the correct value
+        self.Failure = False
 
         self.LaminateH = LaminateH
         self.LaminateV = LaminateV
@@ -199,7 +200,7 @@ class Stringer:
 LaminateHa = LaminateBuilder([45, -45, 0, 0, 0, 0, 0], True, True, 1)
 LaminateVa = LaminateBuilder([0, 0, 0, 0, 0, 45, -45], False, False, 1)
 
-TStringer_a = Stringer(LaminateHa, LaminateVa, 20, 20)
+TStringer_1 = Stringer(LaminateHa, LaminateVa, 20, 20)
 
 
 # ----------------------------------------------------------------------------------------------
@@ -209,7 +210,7 @@ TStringer_a = Stringer(LaminateHa, LaminateVa, 20, 20)
 LaminateHb = LaminateBuilder([45, -45, 0, 0, 0, 0, 0], True, True, 1)
 LaminateVb = LaminateBuilder([0, 0, 0, 0, 0, 45, -45], False, False, 1)
 
-TStringer_b = Stringer(LaminateHb, LaminateVb, 20, 20)
+TStringer_2 = Stringer(LaminateHb, LaminateVb, 20, 20)
 
 # ----------------------------------------------------------------------------------------------
 # Stringer 3:
@@ -218,4 +219,4 @@ TStringer_b = Stringer(LaminateHb, LaminateVb, 20, 20)
 LaminateHb = LaminateBuilder([45, -45, 0, 0, 0, 0, 0], True, True, 1)
 LaminateVb = LaminateBuilder([0, 0, 0, 0, 0, 45, -45], False, False, 1)
 
-TStringer_c = Stringer(LaminateHb, LaminateVb, 20, 20)
+TStringer_3 = Stringer(LaminateHb, LaminateVb, 20, 20)
