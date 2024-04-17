@@ -7,7 +7,7 @@ from Boom import Boom
 #from Skin import Skin 
 from Stringer import Stringer
 from Panel import Panel
-from Structural_Idealization import Structural_Idealization
+from Structural_Idealization_V2 import Structural_Idealization
 # ---------------------------------------------------------------------
 # Remco:
 import Stringer
@@ -23,12 +23,12 @@ Skin_shear     = Skin.Skin_shear
 
 stringers = [copy.deepcopy(Stringer_2),
              copy.deepcopy(Stringer_3),
-             copy.deepcopy(Stringer_3)] #,
-            # copy.deepcopy(Stringer_3),
-            # copy.deepcopy(Stringer_2),
-            # copy.deepcopy(Stringer_1),
-            # copy.deepcopy(Stringer_1),
-            # copy.deepcopy(Stringer_1)]
+             copy.deepcopy(Stringer_3)]
+             #copy.deepcopy(Stringer_3),
+             #copy.deepcopy(Stringer_2),
+             #copy.deepcopy(Stringer_1),
+             #copy.deepcopy(Stringer_1),
+             #copy.deepcopy(Stringer_1)]
 skins     = [copy.deepcopy(Skin_compression),
              copy.deepcopy(Skin_shear),
              copy.deepcopy(Skin_tension),
@@ -95,15 +95,17 @@ print(df_fuselage)
 
 def show_structural_elements(ax, theta, color, label, marker):
     for angle in theta:
-        print(angle)
-        x_dot = (diameter/2) * np.cos(np.radians(angle + 180))
-        y_dot = (diameter/2) * np.sin(np.radians(angle + 180))
+        x_dot = (diameter/2) * np.cos(np.radians(angle))
+        y_dot = (diameter/2) * np.sin(np.radians(angle))
         if angle == theta[0]:
             ax.plot(x_dot, y_dot, marker, markersize = 13, color = color, label = label)
         else:
             ax.plot(x_dot, y_dot, marker,  markersize = 13, color = color)
         offset = 100
-        ax.text(x_dot + 3*offset, y_dot + offset, f'{angle:.2f}°', fontsize=8, verticalalignment='bottom', horizontalalignment = 'left')
+        if angle + 180 < 360:
+            ax.text(x_dot + 3*offset, y_dot + offset, f'{angle + 180:.2f}°', fontsize=8, verticalalignment='bottom', horizontalalignment = 'left')
+        if angle + 180 > 360:
+            ax.text(x_dot + 3*offset, y_dot + offset, f'{angle + 180 - 360:.2f}°', fontsize=8, verticalalignment='bottom', horizontalalignment = 'left')
 
 def show_fuselage(theta_s_array, theta_j_array, theta_b_array):
     fig, (ax1, ax2) = plt.subplots(1, 2)
@@ -124,14 +126,10 @@ def show_fuselage(theta_s_array, theta_j_array, theta_b_array):
 
     # Plot Physical Structure
     if theta_s_array.size > 0:
-        print('stringers')
         show_structural_elements(ax1, theta_s_array, 'r', label = 'stringers', marker='o')
-    print('joints')
     show_structural_elements(ax1, theta_j_array, 'b', label = 'joints', marker='x')
     # Plot Idealized Structure
-    print('boom')
     show_structural_elements(ax2, theta_b_array , 'gray', label = 'booms', marker='o')
-    show_structural_elements(ax2, [0, 90], 'g', label= 'test', marker ='o' )
 
     for ax in axes:
         ax.set_xlabel('Y')

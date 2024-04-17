@@ -54,10 +54,7 @@ def Structural_Idealization(Mx, Vy, diameter, frame_spacing, stringers, skins):
         boom = copy.deepcopy(boom)
         boom.location = theta
         fuselage.booms.append(boom)
-    
-    print(theta_j_array)
-    print(theta_s_array)
-    print(theta_b_array)
+
     # generate all panels with zero thickness:
     for i, theta in enumerate(theta_b_array):
         panel = copy.deepcopy(panel)
@@ -66,7 +63,7 @@ def Structural_Idealization(Mx, Vy, diameter, frame_spacing, stringers, skins):
             panel.stop  = theta_b_array[i + 1]
         else:
             panel.stop  = theta_b_array[0]
-        panel.depth     = fuselage.frame_spacing
+        panel.depth = fuselage.frame_spacing
         fuselage.panels.append(panel)
 
     # retrieve all panels and booms
@@ -76,6 +73,8 @@ def Structural_Idealization(Mx, Vy, diameter, frame_spacing, stringers, skins):
     # assigning all panels lengths and thicknesses:
     theta_j_array = np.append(np.insert(theta_j_array, 0, 0), 360)
     #theta_j_array = np.append(theta_j_array, 360)
+
+    y_bar = 0
 
     for panel in panels:
         if panel != panels[-1]:
@@ -105,8 +104,8 @@ def Structural_Idealization(Mx, Vy, diameter, frame_spacing, stringers, skins):
                 boom_2 = boom
                 y_2    = np.sin(np.radians(boom_2.location))*(diameter/2)
 
-        panel.B_1 = panel.thickness*panel.length*(2 + (y_2/y_1))
-        panel.B_2 = panel.thickness*panel.length*(2 + (y_1/y_2))
+        panel.B_1 = panel.thickness*panel.length*(2 + (y_2 - y_bar)/(y_1 - y_bar))
+        panel.B_2 = panel.thickness*panel.length*(2 + (y_1 - y_bar)/(y_2 - y_bar))
 
     # assigning all booms an area, depending on contribution of skins and stringers:
     for boom in booms:

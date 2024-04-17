@@ -19,7 +19,7 @@ class Fuselage:
         self.panels          = []
         # idealized 2nd moment of area
         self.Ixx             = 0
-        self.mass_frame = mass_frame # in grams
+        self.mass_frame      = mass_frame # in grams
         self.AssignDiameter()
 
     def AssignDiameter(self):
@@ -57,3 +57,4 @@ class Fuselage:
         self.mpl = (self.mass_frame + self.frame_spacing * mpl)/self.frame_spacing
 
         return self.mpl
+    
