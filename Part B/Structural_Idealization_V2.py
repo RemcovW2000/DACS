@@ -7,6 +7,7 @@ from Boom import Boom
 from Skin import Skin 
 from Stringer import Stringer
 from Panel import Panel
+import scipy.optimize    as opt
 
 #d = 6e3 # [mm] 
 
@@ -32,6 +33,7 @@ def Structural_Idealization(Mx, Vy, diameter, frame_spacing, stringers, skins):
     # generate all stringers:
     for theta, stringer in zip(theta_s_array, stringers): 
         stringer.location = theta
+        print(stringer)
 
     # generate all skins:
     for i, skin in enumerate(skins):
@@ -40,6 +42,13 @@ def Structural_Idealization(Mx, Vy, diameter, frame_spacing, stringers, skins):
             skin.stop = theta_j_array[i + 1]
         if i == len(skins) - 1:
             skin.stop = theta_j_array[0]
+
+        # calculating static moment skin
+        skin.CalculateA()
+        skin.StaticMomentSkin()
+
+    y_bar                 = fuselage.CalculateNeutralAxis()
+    fuselage.neutral_axis = y_bar
 
     'Defining all ideal elements'
 
@@ -72,9 +81,6 @@ def Structural_Idealization(Mx, Vy, diameter, frame_spacing, stringers, skins):
 
     # assigning all panels lengths and thicknesses:
     theta_j_array = np.append(np.insert(theta_j_array, 0, 0), 360)
-    #theta_j_array = np.append(theta_j_array, 360)
-
-    y_bar = 0
 
     for panel in panels:
         if panel != panels[-1]:
@@ -130,7 +136,7 @@ def Structural_Idealization(Mx, Vy, diameter, frame_spacing, stringers, skins):
     # calculation equivalent properties:
     Ixx = 0
     for boom in booms:
-        Ixx += boom.area * (np.sin(np.radians(boom.location))*diameter/2)**2
+        Ixx += boom.area * (np.sin(np.radians(boom.location))*diameter/2 - y_bar)**2
     # store
     fuselage.Ixx = Ixx
 

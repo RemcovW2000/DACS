@@ -55,9 +55,6 @@ def Structural_Idealization(Mx, Vy, diameter, frame_spacing, stringers, skins):
         boom.location = theta
         fuselage.booms.append(boom)
     
-    print(theta_j_array)
-    print(theta_s_array)
-    print(theta_b_array)
     # generate all panels with zero thickness:
     for i, theta in enumerate(theta_b_array):
         panel = copy.deepcopy(panel)
@@ -75,7 +72,6 @@ def Structural_Idealization(Mx, Vy, diameter, frame_spacing, stringers, skins):
 
     # assigning all panels lengths and thicknesses:
     theta_j_array = np.append(np.insert(theta_j_array, 0, 0), 360)
-    #theta_j_array = np.append(theta_j_array, 360)
 
     for panel in panels:
         if panel != panels[-1]:

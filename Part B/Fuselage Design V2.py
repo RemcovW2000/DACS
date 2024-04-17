@@ -17,22 +17,22 @@ Stringer_1 = Stringer.TStringer_1
 Stringer_2 = Stringer.TStringer_2
 Stringer_3 = Stringer.TStringer_3
 Skin_compression     = Skin.Skin_compression
-Skin_tension     = Skin.Skin_tension
-Skin_shear     = Skin.Skin_shear
+Skin_tension         = Skin.Skin_tension
+Skin_shear           = Skin.Skin_shear
 # ---------------------------------------------------------------------
 
-stringers = [copy.deepcopy(Stringer_2),
-             copy.deepcopy(Stringer_3),
-             copy.deepcopy(Stringer_3)]
+stringers = [copy.deepcopy(Stringer_3)] #,
              #copy.deepcopy(Stringer_3),
+             #copy.deepcopy(Stringer_3)]
+             #copy.deepcopy(Stringer_3)]
              #copy.deepcopy(Stringer_2),
              #copy.deepcopy(Stringer_1),
              #copy.deepcopy(Stringer_1),
              #copy.deepcopy(Stringer_1)]
 skins     = [copy.deepcopy(Skin_compression),
-             copy.deepcopy(Skin_shear),
-             copy.deepcopy(Skin_tension),
-             copy.deepcopy(Skin_shear)]
+             copy.deepcopy(Skin_compression),
+             copy.deepcopy(Skin_compression),
+             copy.deepcopy(Skin_compression)]
 # ---------------------------------------------------------------------
 # fuselage parameters:
 diameter      = 6e3 # [mm]
@@ -41,9 +41,11 @@ frame_spacing = 2e3 # [mm]
 Vy = -1.5e6 # [N]
 Mx = -15e9  # [Nmm]
 mass_frame = 50 # kg
+
 fuselage = Structural_Idealization(Mx, Vy, diameter, frame_spacing, stringers, skins)
 fuselage.mass_frame = 50000 # weight of a frame in GRAMS!!!
 fuselage.Calculatempl()
+
 
 failure_stringers, load_stringers_v, load_stringers_h, fpf_stringers_v            = [],[],[],[]
 fpf_stringers_h, buckling_stringers, crippling_stringers_v, crippling_stringers_h = [],[],[],[]
@@ -102,12 +104,9 @@ def show_structural_elements(ax, theta, color, label, marker):
         else:
             ax.plot(x_dot, y_dot, marker,  markersize = 13, color = color)
         offset = 100
-        if angle + 180 < 360:
-            ax.text(x_dot + 3*offset, y_dot + offset, f'{angle + 180:.2f}°', fontsize=8, verticalalignment='bottom', horizontalalignment = 'left')
-        if angle + 180 > 360:
-            ax.text(x_dot + 3*offset, y_dot + offset, f'{angle + 180 - 360:.2f}°', fontsize=8, verticalalignment='bottom', horizontalalignment = 'left')
+        ax.text(x_dot + 3*offset, y_dot + offset, f'{angle:.2f}°', fontsize=8, verticalalignment='bottom', horizontalalignment = 'left')
 
-def show_fuselage(theta_s_array, theta_j_array, theta_b_array):
+def show_fuselage(theta_s_array, theta_j_array, theta_b_array, y_bar):
     fig, (ax1, ax2) = plt.subplots(1, 2)
     fig.suptitle('FUSELAGE IDEALIZATION')
     axes = [ax1, ax2]
@@ -132,16 +131,20 @@ def show_fuselage(theta_s_array, theta_j_array, theta_b_array):
     show_structural_elements(ax2, theta_b_array , 'gray', label = 'booms', marker='o')
 
     for ax in axes:
-        ax.set_xlabel('Y')
-        ax.set_ylabel('X')
+        ax.set_xlabel('X')
+        ax.set_ylabel('Y')
         ax.axis('equal')
         ax.grid(True)
         ax.legend()
+        ax.axhline(y = y_bar, color='r', linestyle='--')
+        ax.invert_xaxis()
+        ax.invert_yaxis()
     ax1.set_title('PHYSICAL FUSELAGE')
     ax2.set_title('IDEALIZED FUSELAGE')
 
     plt.show()
 
-show_fuselage(fuselage.theta_stringers_array, fuselage.theta_joints_array, fuselage.theta_booms_array)
+print('y_bar', fuselage.neutral_axis)
+show_fuselage(fuselage.theta_stringers_array, fuselage.theta_joints_array, fuselage.theta_booms_array, fuselage.neutral_axis)
 
 

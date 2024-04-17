@@ -29,7 +29,7 @@ class Fuselage:
 
     def spacing_joints(self): #NOTE: constant spacing for now
         if self.n_joints != 0:
-            theta_joints  = 360/(2*self.n_joints)
+            theta_joints       = 360/(2*self.n_joints)
             theta_joints_array = np.arange(theta_joints, 360, 2*theta_joints)
             return theta_joints_array
         else:
@@ -58,3 +58,17 @@ class Fuselage:
 
         return self.mpl
     
+    def CalculateNeutralAxis(self):
+        tot_area  = 0
+        static_moment = 0
+        for stringer in self.stringers:
+            tot_area             += stringer.area 
+            static_moment        += stringer.area*np.sin(np.radians(stringer.location))*self.diameter/2 
+
+        for skin in self.skins:
+            tot_area      += skin.A
+            static_moment += skin.static_moment
+
+        self.neutral_axis = static_moment/tot_area
+
+        return self.neutral_axis 

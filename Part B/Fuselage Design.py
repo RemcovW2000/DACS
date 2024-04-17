@@ -95,7 +95,6 @@ print(df_fuselage)
 
 def show_structural_elements(ax, theta, color, label, marker):
     for angle in theta:
-        print(angle)
         x_dot = (diameter/2) * np.cos(np.radians(angle + 180))
         y_dot = (diameter/2) * np.sin(np.radians(angle + 180))
         if angle == theta[0]:
@@ -124,12 +123,9 @@ def show_fuselage(theta_s_array, theta_j_array, theta_b_array):
 
     # Plot Physical Structure
     if theta_s_array.size > 0:
-        print('stringers')
         show_structural_elements(ax1, theta_s_array, 'r', label = 'stringers', marker='o')
-    print('joints')
     show_structural_elements(ax1, theta_j_array, 'b', label = 'joints', marker='x')
     # Plot Idealized Structure
-    print('boom')
     show_structural_elements(ax2, theta_b_array , 'gray', label = 'booms', marker='o')
     show_structural_elements(ax2, [0, 90], 'g', label= 'test', marker ='o' )
 

@@ -41,7 +41,7 @@ class Panel:
         D22  = self.Laminate.D_matrix[1][1]
         D12  = self.Laminate.D_matrix[0][1]
         D66  = self.Laminate.D_matrix[2][2]
-        k = self.Ns/self.Nx
+        k = self.Ns/(self.Nx + 1e-20)
         a = self.depth
         b = self.length
         c = (a*k)/(b*np.pi**2)
