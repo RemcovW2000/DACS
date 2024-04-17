@@ -21,8 +21,8 @@ Skin_tension     = Skin.Skin_tension
 Skin_shear     = Skin.Skin_shear
 # ---------------------------------------------------------------------
 
-stringers = [Stringer_2, Stringer_3, Stringer_3, Stringer_3, Stringer_2, Stringer_1, Stringer_1, Stringer_1]
-skins     = [Skin_compression, Skin_shear, Skin_tension, Skin_shear]
+stringers = [Stringer_1, Stringer_2, Stringer_3]
+skins     = [Skin_compression, Skin_shear, Skin_tension, copy.deepcopy(Skin_shear)]
 # ---------------------------------------------------------------------
 # fuselage parameters:
 diameter      = 6e3 # [mm]
@@ -32,7 +32,7 @@ Vy = -1.5e6 # [N]
 Mx = -15e9  # [Nmm]
 
 fuselage = Structural_Idealization(Mx, Vy, diameter, frame_spacing, stringers, skins)
-fuselage.Calculatempl()
+
 
 failure_stringers, load_stringers_v, load_stringers_h, fpf_stringers_v            = [],[],[],[]
 fpf_stringers_h, buckling_stringers, crippling_stringers_v, crippling_stringers_h = [],[],[],[]
@@ -45,9 +45,9 @@ data_stringers = {'Failure?':failure_stringers, 'Nx_v [N/mm]': load_stringers_v,
 data_panels    = {'Failure?':failure_panels, 'Nx [N/mm]': load_panels_Nx, 'Ns [N/mm]': load_panels_Ns, 
                   'FPF': fpf_panels, 'Buckling':buckling_panels}
 
-fuselage.Calculatempl
-data_fuselage  = {'MPL': fuselage.mpl}
-df_fuselage    = pd.DataFrame(data_fuselage)
+#fuselage.Calculatempl()
+#data_fuselage  = {'MPL': fuselage.mpl}
+#df_fuselage    = pd.DataFrame(data_fuselage)
 
 for stringer in fuselage.stringers:
     stringer.FailureAnalysis()
@@ -79,7 +79,7 @@ print('Panels:')
 print(df_panels)
 print('---------------------------------------------------------------------------------------------------------------------------------')
 print('Fuselage:')
-print(df_fuselage)
+#print(df_fuselage)
 
 def show_structural_elements(ax, theta, color, label, marker):
     for angle in theta:

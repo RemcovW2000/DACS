@@ -28,7 +28,7 @@ def Structural_Idealization(Mx, Vy, diameter, frame_spacing, stringers, skins):
     'Defining all physical elements'
     theta_j_array  = fuselage.theta_joints_array
     theta_s_array  = fuselage.theta_stringers_array
-    
+
     # generate all stringers:
     for theta, stringer in zip(theta_s_array, stringers): 
         stringer.location = theta
@@ -63,6 +63,7 @@ def Structural_Idealization(Mx, Vy, diameter, frame_spacing, stringers, skins):
             panel.stop  = theta_b_array[i + 1]
         else:
             panel.stop  = theta_b_array[0]
+        panel.depth = fuselage.frame_spacing
         fuselage.panels.append(panel)
 
     # retrieve all panels and booms

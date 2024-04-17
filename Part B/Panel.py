@@ -15,7 +15,7 @@ class Panel:
         self.Nx        = 0
         self.Ex        = 0 #NOTE: will be assigned according master skin
         self.Laminate  = Laminate 
-        self.frame_spacing = 0
+        self.depth     = 0
         self.Failure   = False
 
     def FailureAnalysis(self):
@@ -42,13 +42,14 @@ class Panel:
         D12  = self.Laminate.D_matrix[0][1]
         D66  = self.Laminate.D_matrix[2][2]
         k = self.Ns/self.Nx
-        a = self.frame_spacing
+        a = self.depth
         b = self.length
-        constant    = np.sqrt(9 + 65536/81 * (a*k)**2 / (b*np.pi**2)**2)
+        c = (a*k)/(b*np.pi**2)
+        constant    = np.sqrt(9 + 65536/81 * c**2)
         numerator   = (np.pi**2)*(D11 + 2*(D12 + 2*D66)*(a/b)**2 + D22*(a/b)**4)
-        denominator = (a**2)*(2 - 8192/81 * (a*k)**2 / (b*np.pi**2)**2)
-        N0          = numerator/(denominator + 1e-20) * min(5 + constant, 5 - constant)
-        BucklingFI  = self.Nx/N0
+        denominator = (a**2)*(2 - 8192/81 * c**2)
+        N0          = numerator/(denominator + 1e-20) * (5 - constant)
+        BucklingFI  = abs(self.Nx/N0)
         return BucklingFI
         
 
