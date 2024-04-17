@@ -21,8 +21,18 @@ Skin_tension     = Skin.Skin_tension
 Skin_shear     = Skin.Skin_shear
 # ---------------------------------------------------------------------
 
-stringers = [Stringer_1, Stringer_2, Stringer_3]
-skins     = [Skin_compression, Skin_shear, Skin_tension, copy.deepcopy(Skin_shear)]
+stringers = [copy.deepcopy(Stringer_2),
+             copy.deepcopy(Stringer_3),
+             copy.deepcopy(Stringer_3),
+             copy.deepcopy(Stringer_3),
+             copy.deepcopy(Stringer_2),
+             copy.deepcopy(Stringer_1),
+             copy.deepcopy(Stringer_1),
+             copy.deepcopy(Stringer_1)]
+skins     = [copy.deepcopy(Skin_compression),
+             copy.deepcopy(Skin_shear),
+             copy.deepcopy(Skin_tension),
+             copy.deepcopy(Skin_shear)]
 # ---------------------------------------------------------------------
 # fuselage parameters:
 diameter      = 6e3 # [mm]
@@ -30,9 +40,10 @@ frame_spacing = 2e3 # [mm]
 # load case
 Vy = -1.5e6 # [N]
 Mx = -15e9  # [Nmm]
-
+mass_frame = 50 # kg
 fuselage = Structural_Idealization(Mx, Vy, diameter, frame_spacing, stringers, skins)
-
+fuselage.mass_frame = 50000 # weight of a frame in GRAMS!!!
+fuselage.Calculatempl()
 
 failure_stringers, load_stringers_v, load_stringers_h, fpf_stringers_v            = [],[],[],[]
 fpf_stringers_h, buckling_stringers, crippling_stringers_v, crippling_stringers_h = [],[],[],[]
@@ -45,9 +56,9 @@ data_stringers = {'Failure?':failure_stringers, 'Nx_v [N/mm]': load_stringers_v,
 data_panels    = {'Failure?':failure_panels, 'Nx [N/mm]': load_panels_Nx, 'Ns [N/mm]': load_panels_Ns, 
                   'FPF': fpf_panels, 'Buckling':buckling_panels}
 
-#fuselage.Calculatempl()
-#data_fuselage  = {'MPL': fuselage.mpl}
-#df_fuselage    = pd.DataFrame(data_fuselage)
+data_fuselage  = {'MPL': [fuselage.mpl]}
+
+df_fuselage    = pd.DataFrame(data_fuselage)
 
 for stringer in fuselage.stringers:
     stringer.FailureAnalysis()
