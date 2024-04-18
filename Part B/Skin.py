@@ -39,7 +39,8 @@ class Skin:
 # Skin 1:
 # --------------------------------------------------
 # create laminate object
-Laminate_a = LaminateBuilder([45], False, True, 1)
+
+Laminate_a = LaminateBuilder([45, -45, 0, 45,0, -45, 45, -45, 0, 90, 0], True, True, 2)
 # Skin 1
 Skin_compression = Skin(Laminate_a)
 
@@ -47,7 +48,7 @@ Skin_compression = Skin(Laminate_a)
 # Skin 2:
 # --------------------------------------------------
 # create laminate object
-Laminate_b = LaminateBuilder([45], False, True, 1)
+Laminate_b = LaminateBuilder([45, -45, 0, 45, -45, 45, -45, 90], True, True, 2)
 # Skin 1
 Skin_shear = Skin(Laminate_b)
 
@@ -55,6 +56,6 @@ Skin_shear = Skin(Laminate_b)
 # Skin 3:
 # -------------------------------------------------
 # create laminate object
-Laminate_c = LaminateBuilder([45], False, True, 1)
+Laminate_c = LaminateBuilder([45, -45, 0, 45,0, -45, 45, -45, 0, 90, 0], True, True, 2)
 # Skin 1
 Skin_tension = Skin(Laminate_c)
