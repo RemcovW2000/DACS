@@ -13,7 +13,7 @@ import scipy.optimize    as opt
 
 np.set_printoptions(linewidth=500, precision=5) #TODO: fix precision
 
-def Structural_Idealization(Mx, Vy, diameter, frame_spacing, stringers, skins):
+def Structural_Idealization_V2(Mx, Vy, diameter, frame_spacing, stringers, skins):
     n_j = len(skins)     # [-]
     n_s = len(stringers) # [-]
 

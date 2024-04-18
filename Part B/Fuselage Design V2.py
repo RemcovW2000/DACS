@@ -7,7 +7,7 @@ from Boom import Boom
 #from Skin import Skin 
 from Stringer import Stringer
 from Panel import Panel
-from Structural_Idealization_V2 import Structural_Idealization
+from Structural_Idealization_V2 import Structural_Idealization_V2
 # ---------------------------------------------------------------------
 # Remco:
 import Stringer
@@ -21,18 +21,14 @@ Skin_tension         = Skin.Skin_tension
 Skin_shear           = Skin.Skin_shear
 # ---------------------------------------------------------------------
 
-stringers = [copy.deepcopy(Stringer_3)] #,
-             #copy.deepcopy(Stringer_3),
-             #copy.deepcopy(Stringer_3)]
-             #copy.deepcopy(Stringer_3)]
-             #copy.deepcopy(Stringer_2),
-             #copy.deepcopy(Stringer_1),
-             #copy.deepcopy(Stringer_1),
-             #copy.deepcopy(Stringer_1)]
-skins     = [copy.deepcopy(Skin_compression),
-             copy.deepcopy(Skin_compression),
-             copy.deepcopy(Skin_compression),
-             copy.deepcopy(Skin_compression)]
+stringers = []
+
+skins = [copy.deepcopy(Skin_shear), copy.deepcopy(Skin_compression), copy.deepcopy(Skin_compression), 
+         copy.deepcopy(Skin_compression), copy.deepcopy(Skin_compression), copy.deepcopy(Skin_compression), copy.deepcopy(Skin_compression), 
+         copy.deepcopy(Skin_shear), copy.deepcopy(Skin_shear), copy.deepcopy(Skin_shear), copy.deepcopy(Skin_tension), copy.deepcopy(Skin_tension), 
+         copy.deepcopy(Skin_tension), copy.deepcopy(Skin_tension), copy.deepcopy(Skin_tension), copy.deepcopy(Skin_tension), copy.deepcopy(Skin_shear), copy.deepcopy(Skin_shear)]
+
+
 # ---------------------------------------------------------------------
 # fuselage parameters:
 diameter      = 6e3 # [mm]
@@ -42,21 +38,21 @@ Vy = -1.5e6 # [N]
 Mx = -15e9  # [Nmm]
 mass_frame = 50 # kg
 
-fuselage = Structural_Idealization(Mx, Vy, diameter, frame_spacing, stringers, skins)
+fuselage = Structural_Idealization_V2(Mx, Vy, diameter, frame_spacing, stringers, skins)
 fuselage.mass_frame = 50000 # weight of a frame in GRAMS!!!
 fuselage.Calculatempl()
 
 
-failure_stringers, load_stringers_v, load_stringers_h, fpf_stringers_v            = [],[],[],[]
-fpf_stringers_h, buckling_stringers, crippling_stringers_v, crippling_stringers_h = [],[],[],[]
-failure_panels, load_panels_Nx, load_panels_Ns, fpf_panels, buckling_panels       = [],[],[],[],[]
+failure_stringers, load_stringers_v, load_stringers_h, fpf_stringers_v                                 = [],[],[],[]
+fpf_stringers_h, buckling_stringers, crippling_stringers_v, crippling_stringers_h                      = [],[],[],[]
+failure_panels, load_panels_Nx, load_panels_Ns, fpf_panels, buckling_panels, monolithic_buckling       = [],[],[],[],[],[]
 
 
 data_stringers = {'Failure?':failure_stringers, 'Nx_v [N/mm]': load_stringers_v, 'Nx_h [N/mm]': load_stringers_h,
                   'FPF_v': fpf_stringers_v, 'FPF_h': fpf_stringers_h,'Buckling':buckling_stringers,
                   'Crippling_v': crippling_stringers_v, 'Crippling_h': crippling_stringers_h}
 data_panels    = {'Failure?':failure_panels, 'Nx [N/mm]': load_panels_Nx, 'Ns [N/mm]': load_panels_Ns, 
-                  'FPF': fpf_panels, 'Buckling':buckling_panels}
+                  'FPF': fpf_panels, 'Buckling':buckling_panels, 'Monolithic Buckling': monolithic_buckling}
 
 data_fuselage  = {'MPL': [fuselage.mpl]}
 
@@ -82,6 +78,8 @@ for panel in fuselage.panels:
     load_panels_Ns.append(np.round(panel.Ns,3))
     fpf_panels.append(np.round(panel.FPFFI,3))
     buckling_panels.append(np.round(panel.BucklingFI,3))
+    monolithic_buckling.append(np.round(panel.MonolithicBucklingFI, 3))
+
 
 df_panels = pd.DataFrame(data_panels)
 

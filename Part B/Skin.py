@@ -32,7 +32,6 @@ class Skin:
         start = np.radians(self.start)
         stop  = np.radians(self.stop)
         self.static_moment = (np.cos(start) - np.cos(stop)) * self.Laminate.h * (self.Diameter/2)*2 
-        print('skin static moment', self.static_moment)
         return self.static_moment
 
 
@@ -56,5 +55,6 @@ Skin_shear = Skin(Laminate_b)
 # Skin 3:
 # -------------------------------------------------
 # create laminate object
+Laminate_c = LaminateBuilder([45], False, True, 1)
 # Skin 1
 Skin_tension = Skin(Laminate_c)
