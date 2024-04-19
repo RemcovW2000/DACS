@@ -13,32 +13,50 @@ from Structural_Idealization_V2 import Structural_Idealization_V2
 import Stringer
 import Skin
 # Code
-Stringer_1 = Stringer.TStringer_1
-Stringer_2 = Stringer.TStringer_2
-Stringer_3 = Stringer.TStringer_3
+Stringer_shear             = Stringer.TStringer_shear
+Stringer_compression       = Stringer.TStringer_compression
+Stringer_tension           = Stringer.TStringer_tension
 Skin_compression     = Skin.Skin_compression
 Skin_tension         = Skin.Skin_tension
 Skin_shear           = Skin.Skin_shear
 # ---------------------------------------------------------------------
 
-stringers = []
+stringers = [] # [copy.deepcopy(Stringer_1), copy.deepcopy(Stringer_1), copy.deepcopy(Stringer_1), copy.deepcopy(Stringer_1), copy.deepcopy(Stringer_1)]
 
-skins = [copy.deepcopy(Skin_shear), copy.deepcopy(Skin_compression), copy.deepcopy(Skin_compression), 
-         copy.deepcopy(Skin_compression), copy.deepcopy(Skin_compression), copy.deepcopy(Skin_compression), copy.deepcopy(Skin_compression), 
-         copy.deepcopy(Skin_shear), copy.deepcopy(Skin_shear), copy.deepcopy(Skin_shear), copy.deepcopy(Skin_tension), copy.deepcopy(Skin_tension), 
-         copy.deepcopy(Skin_tension), copy.deepcopy(Skin_tension), copy.deepcopy(Skin_tension), copy.deepcopy(Skin_tension), copy.deepcopy(Skin_shear), copy.deepcopy(Skin_shear)]
+n_custom_stringers = 8
+n_stringers        = 20 + n_custom_stringers
+while len(stringers) < n_stringers:
+
+    if len(stringers) <= n_stringers/8:
+        stringer = copy.deepcopy(Stringer_shear)
+    elif n_stringers/8 < len(stringers) <= n_stringers*3/8:
+        stringer = copy.deepcopy(Stringer_compression)
+    elif n_stringers*3/8 < len(stringers) <= n_stringers*5/8:
+        stringer = copy.deepcopy(Stringer_shear)
+    elif n_stringers*5/8 < len(stringers) <= n_stringers*7/8:
+        stringer = copy.deepcopy(Stringer_tension)
+    elif n_stringers*7/8 < len(stringers) <= n_stringers:
+        stringer = copy.deepcopy(Stringer_shear)
+
+    stringers.append(stringer)
+
+skins = [copy.deepcopy(Skin_compression), copy.deepcopy(Skin_shear), copy.deepcopy(Skin_tension), copy.deepcopy(Skin_shear)]
+         
+         #copy.deepcopy(Skin_compression), copy.deepcopy(Skin_compression), copy.deepcopy(Skin_compression), copy.deepcopy(Skin_compression), 
+         #copy.deepcopy(Skin_shear), copy.deepcopy(Skin_shear), copy.deepcopy(Skin_shear), copy.deepcopy(Skin_tension), copy.deepcopy(Skin_tension), 
+         #copy.deepcopy(Skin_tension), copy.deepcopy(Skin_tension), copy.deepcopy(Skin_tension), copy.deepcopy(Skin_tension), copy.deepcopy(Skin_shear), copy.deepcopy(Skin_shear)]
 
 
 # ---------------------------------------------------------------------
 # fuselage parameters:
 diameter      = 6e3 # [mm]
-frame_spacing = 2e3 # [mm]
+frame_spacing = 0.5e3 # [mm]
 # load case
 Vy = -1.5e6 # [N]
 Mx = -15e9  # [Nmm]
 mass_frame = 50 # kg
 
-fuselage = Structural_Idealization_V2(Mx, Vy, diameter, frame_spacing, stringers, skins)
+fuselage = Structural_Idealization_V2(Mx, Vy, diameter, frame_spacing, stringers, skins, n_custom_stringers)
 fuselage.mass_frame = 50000 # weight of a frame in GRAMS!!!
 fuselage.Calculatempl()
 
@@ -46,13 +64,14 @@ fuselage.Calculatempl()
 failure_stringers, load_stringers_v, load_stringers_h, fpf_stringers_v                                 = [],[],[],[]
 fpf_stringers_h, buckling_stringers, crippling_stringers_v, crippling_stringers_h                      = [],[],[],[]
 failure_panels, load_panels_Nx, load_panels_Ns, fpf_panels, buckling_panels, monolithic_buckling       = [],[],[],[],[],[]
+stringer_locations, panel_locations                                                                    = [], []
 
 
 data_stringers = {'Failure?':failure_stringers, 'Nx_v [N/mm]': load_stringers_v, 'Nx_h [N/mm]': load_stringers_h,
                   'FPF_v': fpf_stringers_v, 'FPF_h': fpf_stringers_h,'Buckling':buckling_stringers,
-                  'Crippling_v': crippling_stringers_v, 'Crippling_h': crippling_stringers_h}
+                  'Crippling_v': crippling_stringers_v, 'Crippling_h': crippling_stringers_h, 'Location': stringer_locations}
 data_panels    = {'Failure?':failure_panels, 'Nx [N/mm]': load_panels_Nx, 'Ns [N/mm]': load_panels_Ns, 
-                  'FPF': fpf_panels, 'Buckling':buckling_panels, 'Monolithic Buckling': monolithic_buckling}
+                  'FPF': fpf_panels, 'Buckling':buckling_panels, 'Monolithic Buckling': monolithic_buckling, 'Starts @': panel_locations}
 
 data_fuselage  = {'MPL': [fuselage.mpl]}
 
@@ -60,25 +79,56 @@ df_fuselage    = pd.DataFrame(data_fuselage)
 
 for stringer in fuselage.stringers:
     stringer.FailureAnalysis()
-    failure_stringers.append(stringer.Failure)
-    load_stringers_v.append(np.round(stringer.Nxv,3))
-    load_stringers_h.append(np.round(stringer.Nxh,3))
-    fpf_stringers_v.append(np.round(stringer.FPFFIv,3))
-    fpf_stringers_h.append(np.round(stringer.FPFFIh,3))
-    buckling_stringers.append(np.round(stringer.BucklingFI,3))
-    crippling_stringers_v.append(np.round(stringer.CripplingFIv,3))
-    crippling_stringers_h.append(np.round(stringer.CripplingFIh,3))
+    f = 0
+    if stringer.Failure == True:
+        f += 1
+        failure_stringers.append(stringer.Failure)
+        load_stringers_v.append(np.round(stringer.Nxv,3))
+        load_stringers_h.append(np.round(stringer.Nxh,3))
+        fpf_stringers_v.append(np.round(stringer.FPFFIv,3))
+        fpf_stringers_h.append(np.round(stringer.FPFFIh,3))
+        buckling_stringers.append(np.round(stringer.BucklingFI,3))
+        crippling_stringers_v.append(np.round(stringer.CripplingFIv,3))
+        crippling_stringers_h.append(np.round(stringer.CripplingFIh,3))
+        stringer_locations.append(str(stringer.location) + '\u00B0')
+        
+    if f == 0:
+        if stringer.Failure == False:
+            failure_stringers.append(stringer.Failure)
+            load_stringers_v.append(np.round(stringer.Nxv,3))
+            load_stringers_h.append(np.round(stringer.Nxh,3))
+            fpf_stringers_v.append(np.round(stringer.FPFFIv,3))
+            fpf_stringers_h.append(np.round(stringer.FPFFIh,3))
+            buckling_stringers.append(np.round(stringer.BucklingFI,3))
+            crippling_stringers_v.append(np.round(stringer.CripplingFIv,3))
+            crippling_stringers_h.append(np.round(stringer.CripplingFIh,3))
+            stringer_locations.append(str(stringer.location) + '\u00B0')
+        
+
 
 df_stringers = pd.DataFrame(data_stringers)
 
 for panel in fuselage.panels:
     panel.FailureAnalysis()
-    failure_panels.append(panel.Failure)
-    load_panels_Nx.append(np.round(panel.Nx,3))
-    load_panels_Ns.append(np.round(panel.Ns,3))
-    fpf_panels.append(np.round(panel.FPFFI,3))
-    buckling_panels.append(np.round(panel.BucklingFI,3))
-    monolithic_buckling.append(np.round(panel.MonolithicBucklingFI, 3))
+    f = 0
+    if panel.Failure == True:
+        f += 1
+        failure_panels.append(panel.Failure)
+        load_panels_Nx.append(np.round(panel.Nx,3))
+        load_panels_Ns.append(np.round(panel.Ns,3))
+        fpf_panels.append(np.round(panel.FPFFI,3))
+        buckling_panels.append(np.round(panel.BucklingFI,3))
+        monolithic_buckling.append(np.round(panel.MonolithicBucklingFI, 3))
+        panel_locations.append(str(panel.start) + '\u00B0')
+    if f == 0:
+        if  panel.Failure == False:
+                failure_panels.append(panel.Failure)
+                load_panels_Nx.append(np.round(panel.Nx,3))
+                load_panels_Ns.append(np.round(panel.Ns,3))
+                fpf_panels.append(np.round(panel.FPFFI,3))
+                buckling_panels.append(np.round(panel.BucklingFI,3))
+                monolithic_buckling.append(np.round(panel.MonolithicBucklingFI, 3))
+                panel_locations.append(str(panel.start) + '\u00B0')
 
 
 df_panels = pd.DataFrame(data_panels)

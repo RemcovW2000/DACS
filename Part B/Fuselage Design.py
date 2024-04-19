@@ -12,27 +12,37 @@ from Structural_Idealization import Structural_Idealization
 # Remco:
 import Stringer
 import Skin
-# Code
-Stringer_1 = Stringer.TStringer_1
-Stringer_2 = Stringer.TStringer_2
-Stringer_3 = Stringer.TStringer_3
+Stringer_shear             = Stringer.TStringer_shear
+Stringer_compression       = Stringer.TStringer_compression
+Stringer_tension           = Stringer.TStringer_tension
 Skin_compression     = Skin.Skin_compression
-Skin_tension     = Skin.Skin_tension
-Skin_shear     = Skin.Skin_shear
-# ---------------------------------------------------------------------
+Skin_tension         = Skin.Skin_tension
+Skin_shear           = Skin.Skin_shear
+# Code
+stringers = [] # [copy.deepcopy(Stringer_1), copy.deepcopy(Stringer_1), copy.deepcopy(Stringer_1), copy.deepcopy(Stringer_1), copy.deepcopy(Stringer_1)]
 
-stringers = [copy.deepcopy(Stringer_2),
-             copy.deepcopy(Stringer_3),
-             copy.deepcopy(Stringer_3)] #,
-            # copy.deepcopy(Stringer_3),
-            # copy.deepcopy(Stringer_2),
-            # copy.deepcopy(Stringer_1),
-            # copy.deepcopy(Stringer_1),
-            # copy.deepcopy(Stringer_1)]
-skins     = [copy.deepcopy(Skin_compression),
-             copy.deepcopy(Skin_shear),
-             copy.deepcopy(Skin_tension),
-             copy.deepcopy(Skin_shear)]
+n_custom_stringers = 0
+n_stringers        = 20 + n_custom_stringers
+while len(stringers) < n_stringers:
+
+    if len(stringers) <= n_stringers/8:
+        stringer = copy.deepcopy(Stringer_shear)
+    elif n_stringers/8 < len(stringers) <= n_stringers*3/8:
+        stringer = copy.deepcopy(Stringer_compression)
+    elif n_stringers*3/8 < len(stringers) <= n_stringers*5/8:
+        stringer = copy.deepcopy(Stringer_shear)
+    elif n_stringers*5/8 < len(stringers) <= n_stringers*7/8:
+        stringer = copy.deepcopy(Stringer_tension)
+    elif n_stringers*7/8 < len(stringers) <= n_stringers:
+        stringer = copy.deepcopy(Stringer_shear)
+
+    stringers.append(stringer)
+
+skins = [copy.deepcopy(Skin_compression), copy.deepcopy(Skin_compression)] #, copy.deepcopy(Skin_tension), copy.deepcopy(Skin_compression)]
+         
+         #copy.deepcopy(Skin_compression), copy.deepcopy(Skin_compression), copy.deepcopy(Skin_compression), copy.deepcopy(Skin_compression), 
+         #copy.deepcopy(Skin_shear), copy.deepcopy(Skin_shear), copy.deepcopy(Skin_shear), copy.deepcopy(Skin_tension), copy.deepcopy(Skin_tension), 
+         #copy.deepcopy(Skin_tension), copy.deepcopy(Skin_tension), copy.deepcopy(Skin_tension), copy.deepcopy(Skin_tension), copy.deepcopy(Skin_shear), copy.deepcopy(Skin_shear)]
 # ---------------------------------------------------------------------
 # fuselage parameters:
 diameter      = 6e3 # [mm]

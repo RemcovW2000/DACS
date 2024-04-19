@@ -13,14 +13,14 @@ import scipy.optimize    as opt
 
 np.set_printoptions(linewidth=500, precision=5) #TODO: fix precision
 
-def Structural_Idealization_V2(Mx, Vy, diameter, frame_spacing, stringers, skins):
+def Structural_Idealization_V2(Mx, Vy, diameter, frame_spacing, stringers, skins, n_custom_stringers):
     n_j = len(skins)     # [-]
     n_s = len(stringers) # [-]
 
     # print summary
     summary = True
     # specs fuselage section:
-    fuselage = Fuselage(diameter, frame_spacing, n_j, n_s)   
+    fuselage = Fuselage(diameter, frame_spacing, n_j, n_s - n_custom_stringers)   
     fuselage.stringers = stringers
     fuselage.skins     = skins   
 
@@ -33,7 +33,6 @@ def Structural_Idealization_V2(Mx, Vy, diameter, frame_spacing, stringers, skins
     # generate all stringers:
     for theta, stringer in zip(theta_s_array, stringers): 
         stringer.location = theta
-        print(stringer)
 
     # generate all skins:
     for i, skin in enumerate(skins):
@@ -51,10 +50,8 @@ def Structural_Idealization_V2(Mx, Vy, diameter, frame_spacing, stringers, skins
     fuselage.neutral_axis = y_bar
 
     'Defining all ideal elements'
-
-    theta_b_array = np.sort(np.concatenate((theta_j_array, theta_s_array)))
+    theta_b_array = np.unique(np.sort(np.concatenate((theta_j_array, theta_s_array))))
     fuselage.theta_booms_array = theta_b_array
-    
     # initialize a boom and a panel:
     boom  = Boom()
     panel = Panel()
@@ -163,17 +160,66 @@ def Structural_Idealization_V2(Mx, Vy, diameter, frame_spacing, stringers, skins
     def ShearFlow(Vy, panel, panel_index):
         for boom in booms:
             if panel.start == boom.location:
+                print(Vy, Ixx, np.sin(np.radians(boom.location))*(diameter/2))
                 panel.q_b = (-Vy/Ixx)*(boom.area*np.sin(np.radians(boom.location))*(diameter/2)) + panels[panel_index - 1].q_b 
+    
+    for boom in booms:
+        boom.delta_q = (-Vy/Ixx)*(boom.area*np.sin(np.radians(boom.location))*(diameter/2))
+        print('boom dq', boom.delta_q)
+
+
+    panels_to_calculate_q = panels
+    #Slice the array to reorder it
+    
+    for i, panel in enumerate(panels):
+        if panel.stop > 90 and panel.start < 90:
+            index = i
+        if panel.stop == 90:
+            index = i
+        #break
+
+    shifted = np.concatenate((panels_to_calculate_q[index:], panels_to_calculate_q[:index]))
+
+    print(shifted[0].start)
+
+    for i, panel in enumerate(shifted):
+        if i == 0:
+            panel.q_b = 0
+
+        else:
+            for boom in booms:
+                if boom.location == panel.start:
+                    panel.q_b = boom.delta_q + shifted[i - 1].q_b
+    
         
     for i, boom in enumerate(booms):
         AxialStress(Mx, boom, i)
 
+    # for i, panel in enumerate(panels):
+    #     if i == 0:
+    #         panel.q_b = 0
+    #     else:
+    #         ShearFlow(Vy, panel, i)
+
     # basic shear flows
-    for i, panel in enumerate(panels):
-        if i == 0:
-            panel.q_b = 0
-        else:
-            ShearFlow(Vy, panel, i)
+    #panels_to_calculate_q = panels
+    # Slice the array to reorder it
+    
+    # for i, panel in enumerate(panels):
+    #     if panel.stop >= 90:
+    #         index = i
+    #     break
+
+    # shifted = np.concatenate((panels_to_calculate_q[index:], panels_to_calculate_q[:index]))
+
+    # for i, panel in enumerate(shifted):
+    #     if i == 0:
+    #         panel.q_b = 0
+    #     else:
+    #         ShearFlow(Vy, panel, i)
+
+
+
 
     # constant shear flow to close the cut in panel 1
     moment_q_b = 0

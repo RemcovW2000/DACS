@@ -39,6 +39,9 @@ class Fuselage:
         if self.n_stringers != 0:
             theta_stringers       = 360/(2*self.n_stringers)
             theta_stringers_array = np.arange(theta_stringers, 360, 2*theta_stringers)
+            custom_stringers_array = [18, 36, 144, 162, 198, 216, 324, 342]
+            theta_stringers_array = np.sort(np.concatenate((theta_stringers_array, custom_stringers_array)))
+            #print(theta_stringers_array)
             return theta_stringers_array
         else:
             return np.array([])
