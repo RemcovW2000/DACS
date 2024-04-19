@@ -25,6 +25,7 @@ stringers = [] # [copy.deepcopy(Stringer_1), copy.deepcopy(Stringer_1), copy.dee
 
 n_custom_stringers = 8
 n_stringers        = 20 + n_custom_stringers
+
 while len(stringers) < n_stringers:
 
     if len(stringers) <= n_stringers/8:
