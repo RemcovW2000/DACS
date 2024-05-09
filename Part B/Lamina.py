@@ -55,8 +55,6 @@ class Lamina:
         self.Sigma = Sigma                  # Stress state
         self.FailureStresses = []           # List containing stresses at failure
 
-        # save theta in radians
-        self.theta_rad = np.radians(theta)
 
         # Lastly we calculate the Q and S (stifness and compliance) matrices in the initialisation
         self.CalculateQS()
@@ -78,8 +76,8 @@ class Lamina:
         self.v21 = self.v12 * self.E2 / self.E1
 
         # Now calculating values for the Q matrix:
-        m = np.cos(self.theta_rad)  # Cosine of the angle of the material direction 1 with the x-axis
-        n = np.sin(self.theta_rad)  # Sine of the angle of the material direction 1 with the x-axis
+        m = np.cos(np.deg2rad(self.theta))  # Cosine of the angle of the material direction 1 with the x-axis
+        n = np.sin(np.deg2rad(self.theta))  # Sine of the angle of the material direction 1 with the x-axis
 
         Q = 1 - self.v12 * self.v21
         Q11 = self.E1 / Q
@@ -116,8 +114,8 @@ class Lamina:
     # Finally, we can carry out failure analysis to figure out whether a lamina has failed:
     def FailureAnalysis(self, sigma):
         # first we rotate the stress vector sigma by theta -> so back into 123 frame
-        m = np.cos(self.theta_rad)
-        n = np.sin(self.theta_rad)
+        m = np.cos(np.deg2rad(self.theta))
+        n = np.sin(np.deg2rad(self.theta))
         alfamatrix = np.array([[m**2, n**2, 2*m*n],
                                [n**2, m**2, -2*m*n],
                                [-m*n, m*n, m**2 - n**2]])
@@ -219,8 +217,8 @@ class Lamina:
         self.StressAnalysis()
 
         #Now we make a rotation matrix to rotate the stresses into the principal frame
-        m = np.cos(self.theta_rad)
-        n = np.sin(self.theta_rad)
+        m = np.cos(np.deg2rad(self.theta))
+        n = np.sin(np.deg2rad(self.theta))
 
         # Multiply global stresses by rotation matrix:
         AlfaStress = np.array([[m**2, n**2, 2*m*n],

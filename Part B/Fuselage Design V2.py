@@ -23,8 +23,8 @@ Skin_shear           = Skin.Skin_shear
 
 stringers = [] # [copy.deepcopy(Stringer_1), copy.deepcopy(Stringer_1), copy.deepcopy(Stringer_1), copy.deepcopy(Stringer_1), copy.deepcopy(Stringer_1)]
 
-n_custom_stringers = 8
-n_stringers        = 20 + n_custom_stringers
+n_custom_stringers = 0
+n_stringers        = 0 + n_custom_stringers
 
 while len(stringers) < n_stringers:
 
@@ -42,10 +42,11 @@ while len(stringers) < n_stringers:
     stringers.append(stringer)
 
 skins = [copy.deepcopy(Skin_compression), copy.deepcopy(Skin_shear), copy.deepcopy(Skin_tension), copy.deepcopy(Skin_shear)]
-         
-         #copy.deepcopy(Skin_compression), copy.deepcopy(Skin_compression), copy.deepcopy(Skin_compression), copy.deepcopy(Skin_compression), 
-         #copy.deepcopy(Skin_shear), copy.deepcopy(Skin_shear), copy.deepcopy(Skin_shear), copy.deepcopy(Skin_tension), copy.deepcopy(Skin_tension), 
-         #copy.deepcopy(Skin_tension), copy.deepcopy(Skin_tension), copy.deepcopy(Skin_tension), copy.deepcopy(Skin_tension), copy.deepcopy(Skin_shear), copy.deepcopy(Skin_shear)]
+
+skinsmono = [copy.deepcopy(Skin_shear), copy.deepcopy(Skin_compression), copy.deepcopy(Skin_compression),
+         copy.deepcopy(Skin_compression), copy.deepcopy(Skin_compression), copy.deepcopy(Skin_compression), copy.deepcopy(Skin_shear), copy.deepcopy(Skin_shear),
+         copy.deepcopy(Skin_shear), copy.deepcopy(Skin_tension), copy.deepcopy(Skin_tension), copy.deepcopy(Skin_tension), copy.deepcopy(Skin_tension), copy.deepcopy(Skin_tension),
+        copy.deepcopy(Skin_shear), copy.deepcopy(Skin_shear)]
 
 
 # ---------------------------------------------------------------------
@@ -55,10 +56,10 @@ frame_spacing = 0.5e3 # [mm]
 # load case
 Vy = -1.5e6 # [N]
 Mx = -15e9  # [Nmm]
-mass_frame = 50 # kg
+mass_frame = 31.32 # kg
 
-fuselage = Structural_Idealization_V2(Mx, Vy, diameter, frame_spacing, stringers, skins, n_custom_stringers)
-fuselage.mass_frame = 50000 # weight of a frame in GRAMS!!!
+fuselage = Structural_Idealization_V2(Mx, Vy, diameter, frame_spacing, stringers, skinsmono, n_custom_stringers)
+fuselage.mass_frame = mass_frame*1000 # weight of a frame in GRAMS!!!
 fuselage.Calculatempl()
 
 
@@ -72,7 +73,7 @@ data_stringers = {'Failure?':failure_stringers, 'Nx_v [N/mm]': load_stringers_v,
                   'FPF_v': fpf_stringers_v, 'FPF_h': fpf_stringers_h,'Buckling':buckling_stringers,
                   'Crippling_v': crippling_stringers_v, 'Crippling_h': crippling_stringers_h, 'Location': stringer_locations}
 data_panels    = {'Failure?':failure_panels, 'Nx [N/mm]': load_panels_Nx, 'Ns [N/mm]': load_panels_Ns, 
-                  'FPF': fpf_panels, 'Buckling':buckling_panels, 'Monolithic Buckling': monolithic_buckling, 'Starts @': panel_locations}
+                  'FPF': fpf_panels, 'Bu':buckling_panels, 'Mb': monolithic_buckling, 'Starts @': panel_locations}
 
 data_fuselage  = {'MPL': [fuselage.mpl]}
 

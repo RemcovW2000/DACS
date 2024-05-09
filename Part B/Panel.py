@@ -68,7 +68,7 @@ class Panel:
             D66  = self.Laminate.D_matrix[2][2]
             k = self.Ns/(self.Nx + 1e-20)
             a = self.depth
-            b = 1e3*np.pi #6*self.length
+            b = 2.612e3
             c = (a*k)/(b*np.pi**2)
             constant    = np.sqrt(9 + 65536/81 * c**2)
             numerator   = (np.pi**2)*(D11 + 2*(D12 + 2*D66)*(a/b)**2 + D22*(a/b)**4)

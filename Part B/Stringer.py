@@ -198,7 +198,7 @@ class Stringer:
 # Stringer 1:
 # ----------------------------------------------------------------------------------------------
 # creating the laminate objects:
-LaminateH1 = LaminateBuilder([45, -45, 0, 0, 0, 0, 0], True, True, 1)
+LaminateH1 = LaminateBuilder([45, -45, 0, 0, 0, 0, 0, 0, 90], True, True, 1)
 LaminateV1 = LaminateBuilder([0, 0, 0, 0, 0, 45, -45], False, False, 1)
 
 TStringer_shear = Stringer(LaminateH1, LaminateV1, 20, 60)
@@ -208,7 +208,7 @@ TStringer_shear = Stringer(LaminateH1, LaminateV1, 20, 60)
 # Stringer 2:
 # ----------------------------------------------------------------------------------------------
 # creating the laminate object:
-LaminateH2 = LaminateBuilder([45, -45, 0, 0, 0, 0, 0], True, True, 1)
+LaminateH2 = LaminateBuilder([45, -45, 0, 0, 0, 0, 0, 90], True, True, 1)
 LaminateV2 = LaminateBuilder([0, 0, 0, 0, 0, 45, -45], False, False, 1)
 
 TStringer_compression = Stringer(LaminateH2, LaminateV2, 30, 30)
@@ -217,7 +217,7 @@ TStringer_compression = Stringer(LaminateH2, LaminateV2, 30, 30)
 # Stringer 3:
 # ----------------------------------------------------------------------------------------------
 # creating the laminate object:
-LaminateH3 = LaminateBuilder([45, -45, 0, 0, 0, 0, 0], True, True, 1)
+LaminateH3 = LaminateBuilder([45, -45, 0, 0, 0, 0, 0, 0, 90], True, True, 1)
 LaminateV3 = LaminateBuilder([0, 0, 0, 0, 0, 45, -45], False, False, 1)
 
 TStringer_tension = Stringer(LaminateH3, LaminateV3, 20, 60)
