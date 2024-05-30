@@ -292,6 +292,59 @@ class Laminate:
             angles.append(lamina.theta)
         print(angles)
 
+    def CalculateCoreABD(self, corethickness):
+        # Initalizing the A, B and D matrix:
+        A_matrix = np.zeros((3, 3))
+        B_matrix = np.zeros((3, 3))
+        D_matrix = np.zeros((3, 3))
+
+        # Per lamina we calculate the three matrices
+        for lamina in self.laminas:
+            # First we recalculate the Q and S matrix of the lamina:
+            lamina.CalculateQS()
+
+            # Calculate the difference (Z_k - Z_k-1)
+            z1 = lamina.z1 + corethickness/2 + self.h/2
+            z0 = lamina.z0 + corethickness/2 + self.h/2
+            delta_Z = z1 - z0
+            # Update A_ij by adding the product of Q(k) and the difference in Z
+            A_matrix += lamina.Q * delta_Z
+
+            # Now the same for b and d matrices:
+            delta_Z_squared = z1 ** 2 - z0 ** 2
+            B_matrix += 1 / 2 * (lamina.Q * delta_Z_squared)
+
+            delta_Z_cubed = z1 ** 3 - z0 ** 3
+            D_matrix += 1 / 3 * (lamina.Q * delta_Z_cubed)
+
+        # Save ABD matrix
+        CoreABD = np.block([
+            [A_matrix, B_matrix],
+            [B_matrix, D_matrix]
+        ])
+        return CoreABD
+
+    # Function to create the rotation matrix
+    def rotation_matrix(self, theta):
+        c = np.cos(theta)
+        s = np.sin(theta)
+        return np.array([[c ** 2, s ** 2, 2 * c * s],
+                         [s ** 2, c ** 2, -2 * c * s],
+                         [-c * s, c * s, c ** 2 - s ** 2]])
+
+    # Function to transform the ABD matrix
+    def rotated_ABD(self, theta):
+        ABD = self.ABD_matrix
+        T = self.rotation_matrix(theta)
+        # Extending T to a 6x6 transformation matrix
+        T_ext = np.zeros((6, 6))
+        T_ext[:3, :3] = T
+        T_ext[3:, 3:] = T
+
+        # Transform the ABD matrix
+        ABD_transformed = T_ext @ self.ABD_matrix @ T_ext.T
+        return ABD_transformed
+
 def LaminateBuilder(angleslist,symmetry, copycenter, multiplicity):
     if symmetry == True:
         if copycenter == True:
@@ -316,4 +369,5 @@ def LaminateBuilder(angleslist,symmetry, copycenter, multiplicity):
 
     laminate = Laminate(laminas)
     return laminate
+
 
