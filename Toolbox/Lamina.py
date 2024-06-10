@@ -234,3 +234,26 @@ class Lamina:
 
         # Return the principal stresses and strains:
         return Sigma123, Epsilon123
+
+    def delaminationanalysis(self, Taurz0, Taurz1):
+        # Taurz0 = shear stress at bottom of ply
+        # Taurz1 = shear stress at top of ply
+
+        bottomdelamination = False
+        topdelamination = False
+
+
+        Tauxz0 = Taurz0 * np.cos(np.deg2rad(self.theta))
+        Tauyz0 = Taurz0 * np.cos(np.deg2rad(self.theta))
+
+        Tauxz1 = Taurz1 * np.cos(np.deg2rad(self.theta))
+        Tauyz1 = Taurz1 * np.cos(np.deg2rad(self.theta))
+
+        # Now we can use max stress:
+        if Tauxz0/self.Sxz >= 1 or Tauyz0/self.Syz >= 1:
+            bottomdelamination = True
+
+        if Tauxz1/self.Sxz >= 1 or Tauyz1 >= 1:
+            topdelamination = True
+
+        return bottomdelamination, topdelamination

@@ -1,6 +1,5 @@
 import numpy as np
-from Laminate import Laminate
-from Lamina import Lamina
+
 
 class Panel:
     def __init__(self, Laminate=None):

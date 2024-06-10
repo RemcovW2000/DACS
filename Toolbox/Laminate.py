@@ -1,7 +1,7 @@
 import numpy as np
 from tqdm import tqdm
-from Lamina import Lamina
-import MP
+from Toolbox.Lamina import Lamina
+from Toolbox import MP
 import copy
 class Laminate:
     def __init__(self, laminas, Loads=None, Strains=None):

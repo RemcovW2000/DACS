@@ -1,11 +1,8 @@
 import numpy as np
-from tqdm import tqdm
 import copy
-from Laminate import Laminate
-from Lamina import Lamina
-import MP
-from Laminate import LaminateBuilder
-from Sandwich import Sandwich, Core, Member
+from Toolbox import MP
+from Toolbox.Laminate import LaminateBuilder
+from Toolbox.Sandwich import Sandwich, Core, Member
 
 laminate1 = LaminateBuilder([45, -45, 45, -45], True, False, 1)
 laminate2 = copy.deepcopy(laminate1)

@@ -9,11 +9,11 @@ elasticproperties = [E1, E2, G12, v12]
 E11f = 6000   # TBD
 v21f = 0.1      # TBD
 msf = 1.1       # TBD
-R11t = 2200*0.416     # From assignment
-R11c = 1800*0.416     # From assignment
-yt = 70*0.416         # From assignment
-yc = 300*0.416        # From assignment
-S = 100*0.416         # From assignment
+R11t = 2200     # From assignment
+R11c = 1800     # From assignment
+yt = 70         # From assignment
+yc = 300        # From assignment
+S = 100       # From assignment
 
 failureproperties = [E11f, v21f, msf, R11t, R11c, yt, yc, S]
 
@@ -45,4 +45,14 @@ HRH144props = {
     'Gyz': 76,
     'Xc': 14.48,
     'rho': 144
+}
+
+PoplarProps = {
+    'Ez': 621,
+    'Sxz': 3.55,
+    'Gxz': 121,
+    'Syz': 2.07,
+    'Gyz': 76,
+    'Xc': 14.48,
+    'rho': 401
 }

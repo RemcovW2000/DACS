@@ -4,27 +4,7 @@ from Lamina import Lamina
 import MP
 import copy
 from Laminate import Laminate
-
-class Core:
-    def __init__(self, thickness, coreproperties):
-        self.thickness = thickness
-        self.coreproperties = coreproperties
-
-    def Gxbarz(self, theta):
-        Gxz = self.coreproperties['Gxz']
-        Gyz = self.coreproperties['Gyz']
-        sin_theta_squared = np.sin(theta) ** 2
-        cos_theta_squared = np.cos(theta) ** 2
-        Gxbarz = sin_theta_squared * Gyz + cos_theta_squared * Gxz
-        return Gxbarz
-
-    def Gybarz(self, theta):
-        Gxz = self.coreproperties['Gxz']
-        Gyz = self.coreproperties['Gyz']
-        sin_theta_squared = np.sin(theta) ** 2
-        cos_theta_squared = np.cos(theta) ** 2
-        Gybarz = cos_theta_squared * Gyz + sin_theta_squared * Gxz
-        return Gybarz
+from Core import core
 
 class Sandwich:
     def __init__(self, laminate1, laminate2, core, Loads):
@@ -107,33 +87,5 @@ class Sandwich:
     def AsymThinWrinkling(self, Ez, t_core, t_face, E_f, G_45):
         Ns_w = 0.33 * t_face ** (3 / 2) * np.sqrt(Ez * E_f / t_core)
         return Ns_w
-
-class Member:
-    def __init__(self, panel, loads, a, b):
-        self.panel = panel # could be either laminate or sandwich, both should work
-        self.loads = loads # total loads, not intensity!!!
-
-        self.a = a # panel width
-        self.b = b # panel depth
-
-    def ShearBucklingFF(self):
-        D11 = self.panel.ABD_matrix[3, 3]
-        D12 = self.panel.ABD_matrix[3, 4]
-        D22 = self.panel.ABD_matrix[4, 4]
-        D66 = self.panel.ABD_matrix[5, 5]
-
-        term1 = (9 * np.pi ** 4 * self.b) / (32 * self.a ** 3)
-        term2 = (D11 + 2 * (D12 + 2 * D66)) * (self.a ** 2 / self.b ** 2)
-        term3 = D22 * (self.a ** 4 / self.b ** 4)
-        Nxypanel = 0.78 * term1 * (term2 + term3)
-        return Nxypanel
-
-    def PanelFF(self):
-        # Calculate the failure state/factor of the panel itself, meaning FPF or crippling:
-        # Assuming symmetric laminates, so the force is split between laminates:
-
-        return None
-
-
 
 

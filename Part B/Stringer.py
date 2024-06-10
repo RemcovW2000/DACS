@@ -1,8 +1,5 @@
 import numpy as np
-from Laminate import Laminate
-from Laminate import LaminateBuilder
-from Lamina import Lamina
-import MP
+from Toolbox.Laminate import LaminateBuilder
 
 
 class Stringer:
