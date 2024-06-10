@@ -55,6 +55,11 @@ class Lamina:
         self.Sigma = Sigma                  # Stress state
         self.FailureStresses = []           # List containing stresses at failure
 
+        # Hard coded for now
+        # TODO put this into MP file
+        self.Sxz = 92 # Shear strength in xz (in direction of fibers)
+        self.Syz = 73 # Shear strength in yz (transversely to fibers)
+
 
         # Lastly we calculate the Q and S (stifness and compliance) matrices in the initialisation
         self.CalculateQS()
@@ -235,25 +240,29 @@ class Lamina:
         # Return the principal stresses and strains:
         return Sigma123, Epsilon123
 
-    def delaminationanalysis(self, Taurz0, Taurz1):
+    def delaminationanalysis(self, Taurz0, Taurz1, azimuth):
         # Taurz0 = shear stress at bottom of ply
         # Taurz1 = shear stress at top of ply
 
         bottomdelamination = False
         topdelamination = False
 
+        # angle between direction of stress and the 123 axis system:
+        psi = self.theta-azimuth
 
-        Tauxz0 = Taurz0 * np.cos(np.deg2rad(self.theta))
-        Tauyz0 = Taurz0 * np.cos(np.deg2rad(self.theta))
+        Tau1z0 = Taurz0 * np.cos(np.deg2rad(psi))
+        Tau2z0 = Taurz0 * np.sin(np.deg2rad(psi))
 
-        Tauxz1 = Taurz1 * np.cos(np.deg2rad(self.theta))
-        Tauyz1 = Taurz1 * np.cos(np.deg2rad(self.theta))
+        Tau1z1 = Taurz1 * np.cos(np.deg2rad(psi))
+        Tau2z1 = Taurz1 * np.sin(np.deg2rad(psi))
 
         # Now we can use max stress:
-        if Tauxz0/self.Sxz >= 1 or Tauyz0/self.Syz >= 1:
+        if abs(Tau1z0/self.Sxz) >= 1 or abs(Tau2z0/self.Syz) >= 1:
             bottomdelamination = True
 
-        if Tauxz1/self.Sxz >= 1 or Tauyz1 >= 1:
+        if abs(Tau1z1/self.Sxz) >= 1 or abs(Tau2z1/self.Syz) >= 1:
             topdelamination = True
+        # else:
+            # print('stresses on top surface: ', Tau1z1, Tau2z1)
 
         return bottomdelamination, topdelamination

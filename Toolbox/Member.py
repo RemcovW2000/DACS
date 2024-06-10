@@ -2,6 +2,7 @@ import numpy as np
 from Toolbox.Lamina import Lamina
 from Toolbox import MP
 from Toolbox.Laminate import Laminate, LaminateBuilder
+import matplotlib.pyplot as plt
 
 class Member:
     def __init__(self, panel, loads = [0, 0, 0, 0, 0, 0], a = 300, b = 200):
@@ -47,11 +48,11 @@ class Member:
         D22 = ABD[4, 4]
 
         # Calculate components of the numerator
-        term1 = np.sin(m * np.pi * x / a)
+        term1 = np.sin(m * np.pi * xo / a)
         term2 = np.sin(n * np.pi * yo / b)
-        term3 = np.sin(m * np.pi * xo / a)
+        term3 = np.sin(m * np.pi * x / a)
         term4 = np.sin(n * np.pi * y / b)
-        numerator = 4 * F / (a * b) * term1 * term2 * term3 * term4
+        numerator = 4 * (F / (a * b)) * term1 * term2 * term3 * term4
 
         # Calculate components of the denominator
         term5 = D11 * (m * np.pi / a) ** 4
@@ -63,8 +64,8 @@ class Member:
 
     def compute_deflection(self, F, xo, yo, x, y):
         # Number of terms in fourier series hardcoded for now:
-        max_m = 100
-        max_n = 100
+        max_m = 20
+        max_n = 20
 
         result = 0
         for m in range(1, max_m + 1):
@@ -93,12 +94,11 @@ class Member:
         return Eindentation
 
     def calculate_deltamax(self, F, k):
-        self.deltamax = (F / k) ^ (2 / 3)
-        return (F/k)^(2/3)
+        return (F/k)**(2/3)
 
     def calculate_Rc(self):
-        self.Rc = np.sqrt(self.R_impactor**2 - (self.R_impactor-self.deltamax)**2)
-        return self.Rc
+        Rc = np.sqrt(self.R_impactor**2 - (self.R_impactor-self.deltamax)**2)
+        return Rc
 
     def k_stiffness(self, R):
         # Properties of impactor:
@@ -113,7 +113,7 @@ class Member:
         A12 = ABD[0,1]
 
         # Ask how to calculate this:
-        Gzr = 4.5e3 # PLACEHOLDER!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        Gzr = 4500 # PLACEHOLDER!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
         term1 = np.sqrt(A22)
         inner_term1 = np.sqrt(A11 * A22) + Gzr
@@ -124,25 +124,30 @@ class Member:
         denominator = 2 * np.pi * np.sqrt(Gzr) * (A11 * A22 - A12 ** 2)
         K2 = numerator / denominator
 
+        K2 = (1-0.3**2)/11.2e3
         k = 4*np.sqrt(R)/(3*np.pi*(K1 + K2))
         return k
 
     def Eimpact_estimate(self, F, xo, yo):
         return self.Eindentation(F) + self.Edeflection(F, xo, yo)
 
-    def impactforce(self, Eimpact, xo, yo, tol=1e-6, max_iter=1000):
+    def impactforce(self, Eimpact, xo, yo, tol=1e-4, max_iter=1000):
         # This function sets the attribute Fimpact and also returns the force
 
         # Let's also save the impact energy for which
         self.Eimpact = Eimpact
 
-        F = 100  # Initial guess for F
+        F = 1000 # Initial guess for F
         for i in range(max_iter):
             E_est = self.Eimpact_estimate(F, xo, yo)
             diff = E_est - Eimpact
 
             if abs(diff) < tol:
+                # Set impact force attribute for later use:
                 self.Fimpact = F
+
+                # Set delta max attribute for later use:
+                self.deltamax = self.calculate_deltamax(F, self.k_stiffness(self.R_impactor))
                 return F  # Found the solution within tolerance
 
             # Newton-Raphson update step
@@ -155,34 +160,141 @@ class Member:
         raise ValueError("Failed to converge to a solution")
 
     def Taurz(self, r, z):
+        # First run the following:
+        # 2. self.impactforce()
+        # We don't run this everytime because it's time consuming!
         Ftotal = self.Fimpact
-        Rc = self.Rc
-        term1 = 1-(r/Rc)^2
-        numerator = Ftotal * term1**1.5
-        denominator = 2*np.pi*r
-        Tauavg = numerator/denominator
+        Rc = self.calculate_Rc()
+
+        if r < Rc:
+            term1 = 1-(r/Rc)**2
+            numerator = Ftotal * term1**(3/2)
+            if r == 0:
+                r = 1e-10
+            denominator = 2*np.pi*r*self.h
+            Tauavg = numerator/denominator
+        elif r >= Rc:
+            Tauavg = Ftotal/(2*np.pi*r*self.h)
+
         Taumax = 1.5*Tauavg
 
         # Now use Tauavg to find the
-        Taurz = Taumax(1-(2*z**2)/self.h**2)
+        Taurz = Taumax*(1-((2*z)**2)/self.h**2)
         return Taurz
 
-Laminate = LaminateBuilder([0, 90, 45, -45], True, True, 1)
+    def DelaminationAnalysis(self, azimuth, rmax):
+        # First run the following:
+        # 1. self.impactforce()
+        # We don't run this everytime because it's time consuming!
+        rinterval = 0.001 # mm
+
+        laminate = self.panel
+
+        # Delamination lengths should be a list with length of the laminas list +1, each lamina has 2 sides!
+        # However, the top and bottom should always have length zero as there is no delamination possible on the outside
+        delaminationlengths = [0 for _ in range(len(laminate.laminas) + 1)]
+
+        for laminaindex, lamina in enumerate(laminate.laminas):
+            r = 0
+            prev_topDL = True
+            prev_botDL = True
+
+            while r < rmax:
+                # check the shear stress at ply interfaces at different locations r:
+                z0 = lamina.z0
+                z1 = lamina.z1
+                Tauz0 = self.Taurz(r, z0)
+                Tauz1 = self.Taurz(r, z1)
+                bottomdelamination, topdelamination = lamina.delaminationanalysis(Tauz0, Tauz1, azimuth)
+
+                # When the function returns false for the firs time, the delamination has stopped at that r:
+                if bottomdelamination != prev_botDL:
+                    # print(Tauz0, 'at radius:', r)
+                    bottomdelamination_length = r
+
+                    # Now we'll add this to the delamination lengths list, if it is greater than the last delamination length
+                    if bottomdelamination_length > delaminationlengths[laminaindex]:
+                        delaminationlengths[laminaindex] = bottomdelamination_length
+                    else:
+                        pass
+
+                if topdelamination != prev_topDL:
+                    topdelamination_length = r
+
+                    # Now we'll add this to the delamination lengths list, if it is greater than the last delamination length
+                    if topdelamination_length > delaminationlengths[laminaindex + 1]:
+                        delaminationlengths[laminaindex + 1] = topdelamination_length
+                    else:
+                        pass
+
+                if not topdelamination and not bottomdelamination:
+                    break
+
+                prev_botDL = bottomdelamination
+                prev_topDL = topdelamination
+
+                r = r + rinterval
+        return delaminationlengths
+
+    def plot_delamination(self, delaminationlengths):
+        Rc = self.calculate_Rc()
+        fig, ax = plt.subplots()
+        laminate = self.panel
+
+        # Set x-limit beyond Rc
+        xlim_value = max(delaminationlengths) * 2
+        ax.set_xlim(0, xlim_value)
+
+        # Plotting black horizontal lines for ply interfaces
+        for i, lamina in enumerate(laminate.laminas):
+            z0 = lamina.z0
+            z1 = lamina.z1
+            ax.plot([0, xlim_value], [z0, z0], color='black')
+            ax.plot([0, xlim_value], [z1, z1], color='black')
+
+        # Plotting blue lines for delamination lengths with increased thickness
+        for i, length in enumerate(delaminationlengths):
+            if i == 0 or i == len(delaminationlengths) - 1:
+                continue  # Skip the top and bottom outer surfaces
+            z = laminate.laminas[i - 1].z1  # Bottom of the current lamina
+            ax.plot([0, length], [z, z], color='blue', linewidth=2)
+
+        # Plotting the vertical black dashed line at Rc
+        ax.axvline(x=Rc, color='black', linestyle='--', label='Rc')
+
+        ax.set_xlabel('Delamination Length (mm)')
+        ax.set_ylabel('Ply Interface Position (z)')
+        ax.set_title('Delamination Analysis')
+        plt.legend()
+        plt.show()
+
+    def plot_Taurz(self, z, rmax):
+        r_values = np.linspace(2, rmax, 1000)
+        Taurz_values = [self.Taurz(r, z) for r in r_values]
+
+        plt.figure()
+        plt.plot(r_values, Taurz_values, label=f'Taurz at z={z}')
+        plt.axvline(x=self.calculate_Rc(), color='black', linestyle='--', label='Rc')
+        plt.xlabel('r (mm)')
+        plt.ylabel('Taurz')
+        plt.title(f'Taurz as a function of r at z={z}')
+        plt.legend()
+        plt.show()
+
+
+Laminate = LaminateBuilder([0, 90, 45, -45], True, True, 5)
 
 Member = Member(Laminate)
-impactforce = Member.impactforce(30, 150, 100)
+impactforce = Member.impactforce(1000*1000, 150, 100)
 deflection = Member.compute_deflection(impactforce, 150, 100, 150, 100)
 print('Impact force: ', impactforce, 'N')
 print('Deflection at this load: ', deflection, 'mm')
 
+delamination_lengths = Member.DelaminationAnalysis(45, 20)
+print(np.round(delamination_lengths, 2))
 
-
-
-
-
-
-
-
+Member.plot_delamination(delamination_lengths)
+Member.plot_Taurz(z=0, rmax=20)
 
 
 

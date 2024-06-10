@@ -6,7 +6,7 @@ import copy
 class Laminate:
     def __init__(self, laminas, Loads=None, Strains=None):
         # laminas is a python list of lamina objects, which make up the laminate.
-        # The laminate layers are ordened by the order of the list.
+        # The laminate layers are ordened by the order of the list, from bottom to top.
         self.laminas = laminas
         self.Loads   = Loads
 
