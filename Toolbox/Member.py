@@ -167,12 +167,13 @@ class Member:
         Rc = self.calculate_Rc()
 
         if r < Rc:
-            term1 = 1-(r/Rc)**2
-            numerator = Ftotal * term1**(3/2)
-            if r == 0:
-                r = 1e-10
-            denominator = 2*np.pi*r*self.h
-            Tauavg = numerator/denominator
+            a = 1/Rc**2
+            term1 = 3*a*Ftotal
+            term2 = 1/(3*a)
+            numerator = (1-a*r**2)**1.5
+            denominator = 3*a
+            Fr = term1*(term2 -numerator/denominator)
+            Tauavg = Fr/(2*np.pi*r*self.h)
         elif r >= Rc:
             Tauavg = Ftotal/(2*np.pi*r*self.h)
 
@@ -198,6 +199,9 @@ class Member:
             r = 0
             prev_topDL = True
             prev_botDL = True
+
+            # We need the interlaminar shear strength of the plies in the azimuth direction:
+            Taucrit = lamina.Taucrit(azimuth)
 
             while r < rmax:
                 # check the shear stress at ply interfaces at different locations r:

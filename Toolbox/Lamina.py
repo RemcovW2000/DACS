@@ -1,4 +1,5 @@
 import numpy as np
+import scipy.optimize as opt
 class Lamina:
     def __init__(self, t, theta, elasticproperties, failureproperties = None, z0=None, z1=None, Sigma = None, Epsilon = None, FailureState = 0):
         # elasticproperties format:     [E1, E2, G12, v12]
@@ -266,3 +267,27 @@ class Lamina:
             # print('stresses on top surface: ', Tau1z1, Tau2z1)
 
         return bottomdelamination, topdelamination
+
+    def Taucrit(self, azimuth):
+        """
+        This function calculates the interlaminar shear strength in a given direction
+        :param azimuth:
+        :returns: scalar value for interlaminar shear strength
+        """
+        psi = self.theta - azimuth
+
+        def Find0(Taur):
+            term1 = Taur*np.cos(np.deg2rad(psi))/self.Sxz
+            term2 = Taur*np.sin(np.deg2rad(psi))/self.Syz
+
+            Fi = term1**2 + term2**2
+            return Fi-1
+
+        # define bounds for the solution of Taur -> cannot be outside the two values for S
+        a = self.Syz
+        b = self.Sxz
+
+        # Find the root within the given bounds
+        Taucrit = opt.brentq(Find0, a, b)
+
+        return Taucrit
