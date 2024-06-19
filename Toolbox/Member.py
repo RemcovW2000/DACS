@@ -3,6 +3,8 @@ from Toolbox.Lamina import Lamina
 from Toolbox import MP
 from Toolbox.Laminate import Laminate, LaminateBuilder
 import matplotlib.pyplot as plt
+import scipy.optimize as opt
+import scipy.interpolate as interp
 
 class Member:
     def __init__(self, panel, loads = [0, 0, 0, 0, 0, 0], a = 300, b = 200):
@@ -167,6 +169,8 @@ class Member:
         Rc = self.calculate_Rc()
 
         if r < Rc:
+            if r == 0:
+                r = 1e-10
             a = 1/Rc**2
             term1 = 3*a*Ftotal
             term2 = 1/(3*a)
@@ -203,42 +207,134 @@ class Member:
             # We need the interlaminar shear strength of the plies in the azimuth direction:
             Taucrit = lamina.Taucrit(azimuth)
 
-            while r < rmax:
-                # check the shear stress at ply interfaces at different locations r:
-                z0 = lamina.z0
-                z1 = lamina.z1
-                Tauz0 = self.Taurz(r, z0)
-                Tauz1 = self.Taurz(r, z1)
-                bottomdelamination, topdelamination = lamina.delaminationanalysis(Tauz0, Tauz1, azimuth)
+            # check the shear stress at ply interfaces at different locations r:
+            z0 = lamina.z0
+            z1 = lamina.z1
 
-                # When the function returns false for the firs time, the delamination has stopped at that r:
-                if bottomdelamination != prev_botDL:
-                    # print(Tauz0, 'at radius:', r)
-                    bottomdelamination_length = r
+            # Find the maximum shear stress:
+            MaxTaurz0 = self.MaxTaurz(z0)
+            MaxTaurz1 = self.MaxTaurz(z1)
 
-                    # Now we'll add this to the delamination lengths list, if it is greater than the last delamination length
-                    if bottomdelamination_length > delaminationlengths[laminaindex]:
-                        delaminationlengths[laminaindex] = bottomdelamination_length
-                    else:
-                        pass
+            # Only do delamination analysis if it's even possible for a delamiination to occur:
+            if MaxTaurz0[0] > Taucrit:
+                bottomdelamination_length = Member.calculate_delamination_length(rmax, z0, Taucrit, MaxTaurz0[1])
+            else:
+                bottomdelamination_length = 0
 
-                if topdelamination != prev_topDL:
-                    topdelamination_length = r
+            # only add the delamination if the delamination is greater than previously found
+            if bottomdelamination_length > delaminationlengths[laminaindex]:
+                delaminationlengths[laminaindex] = bottomdelamination_length
 
-                    # Now we'll add this to the delamination lengths list, if it is greater than the last delamination length
-                    if topdelamination_length > delaminationlengths[laminaindex + 1]:
-                        delaminationlengths[laminaindex + 1] = topdelamination_length
-                    else:
-                        pass
+            # Only do delamination analysis if it's even possible for a delamiination to occur:
+            if MaxTaurz1[0] > Taucrit:
+                topdelamination_length = Member.calculate_delamination_length(rmax, z1, Taucrit, MaxTaurz1[1])
+            else:
+                topdelamination_length = 0
 
-                if not topdelamination and not bottomdelamination:
-                    break
-
-                prev_botDL = bottomdelamination
-                prev_topDL = topdelamination
-
-                r = r + rinterval
+            # only add the delamination if the delamination is greater than previously found
+            if topdelamination_length > delaminationlengths[laminaindex + 1]:
+                delaminationlengths[laminaindex + 1] = topdelamination_length
         return delaminationlengths
+
+    def calculate_delamination_length(self, rmax, z, Taucrit, r_maxTau):
+        """
+        Calculates delamination length, given a shear strength and a z coordinate
+        :return:
+        """
+        # Create the array of data, Tau, r, integral of Tau as rows:
+        stepsize = 0.001
+        r_values = np.arange(0, rmax, stepsize)
+        n = len(r_values)
+
+        # array has 3 columns:
+        # Column 1 is r
+        # Column 2 is the function value
+        # Column 3 is the integral from zero up to that point
+
+        integral_value = 0
+        integral_values = []
+        for r in r_values:
+            # Save Taurz
+            Taur = self.Taurz(r, z)
+
+            # Update integral and save
+            # TODO: figure out wether to use cylindrical coordinates for this integral! it's a force equilibrium
+            # the unit of the integral 'force' is in N per unit angle, as usually it would be in N per unit width if it
+            # were a linear problem..
+            integral_value += Taur * stepsize
+            integral_values.append(integral_value)
+
+
+        integral_interp = interp.interp1d(r_values, integral_values, kind='linear')
+
+        # Function to find roots for
+        def func_to_solve(r):
+            return self.Taurz(r, z) - Taucrit
+
+        # Find r values where Taurz equals specific_value
+        roots = []
+        try:
+            # Use root_scalar to find the roots
+            result = opt.root_scalar(func_to_solve, bracket=[0, r_maxTau], method='brentq')
+            if result.converged:
+                roots.append(result.root)
+        except ValueError:
+            pass
+
+        # It's known the function Taurz first goes above the specific value and then dips back down again
+        # We try to find the second root by searching beyond the first root
+        if roots:
+            try:
+                result = opt.root_scalar(func_to_solve, bracket=[r_maxTau, rmax], method='brentq')
+                if result.converged:
+                    roots.append(result.root)
+            except ValueError:
+                pass
+
+        # Get the integral values at the roots
+        integral_at_roots = [integral_interp(root) for root in roots]
+
+        # Now calculate the area above the Taucrit and left of Taucrit:
+        Areserve = roots[0]*Taucrit - integral_at_roots[0]
+        Aexcess = (integral_at_roots[1] - integral_at_roots[0]) - (roots[1]-roots[0]) * Taucrit
+
+        # If Aexcess is smaller than Areserve, then the delamination length is simply the last root:
+        if Aexcess < Areserve:
+            print('Delamination length is at last root')
+            return roots[1]
+
+        # If this is not the case, we have to calculate at which point the force equilibrium has been reached,
+        # Beyond the last root!
+        print('Delamination goes beyond last root')
+
+        # -> find r at which the integral equals the area Taucrit * r:
+        def AreaEq(r):
+            return integral_interp(r) - Taucrit * r
+
+        result = opt.root_scalar(AreaEq, bracket=[roots[1], rmax-stepsize], method='brentq')
+        delaminationlength = result.root
+
+        return delaminationlength
+
+    def MaxTaurz(self, z):
+        """
+        returns the maximum value for Taurz given an Fimpact and z coordinate. This to determine wether
+        any delamination happens at all
+        :return:
+        """
+
+        # Interval in which you want to find the maximum for the first parameter
+        bounds = (0, self.calculate_Rc())
+
+        # Creating a lambda function to fix y and vary x
+        fixed_y_func = lambda r: self.Taurz(r, z)
+
+        # Minimizing the negative of the function to find the maximum
+        result = opt.minimize_scalar(lambda x: -fixed_y_func(x), bounds=bounds, method='bounded')
+        max_r = result.x
+
+        MaxTaurz = self.Taurz(max_r, z)
+        return MaxTaurz, max_r
 
     def plot_delamination(self, delaminationlengths):
         Rc = self.calculate_Rc()
@@ -273,7 +369,7 @@ class Member:
         plt.show()
 
     def plot_Taurz(self, z, rmax):
-        r_values = np.linspace(2, rmax, 1000)
+        r_values = np.linspace(0, rmax, 1000)
         Taurz_values = [self.Taurz(r, z) for r in r_values]
 
         plt.figure()
@@ -289,7 +385,7 @@ class Member:
 Laminate = LaminateBuilder([0, 90, 45, -45], True, True, 5)
 
 Member = Member(Laminate)
-impactforce = Member.impactforce(1000*1000, 150, 100)
+impactforce = Member.impactforce(1000*30, 150, 100)
 deflection = Member.compute_deflection(impactforce, 150, 100, 150, 100)
 print('Impact force: ', impactforce, 'N')
 print('Deflection at this load: ', deflection, 'mm')
@@ -299,6 +395,8 @@ print(np.round(delamination_lengths, 2))
 
 Member.plot_delamination(delamination_lengths)
 Member.plot_Taurz(z=0, rmax=20)
+
+print(Member.calculate_delamination_length(100, 0, 70, 3))
 
 
 
