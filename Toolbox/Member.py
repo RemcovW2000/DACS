@@ -5,6 +5,7 @@ from Toolbox.Laminate import Laminate, LaminateBuilder
 import matplotlib.pyplot as plt
 import scipy.optimize as opt
 import scipy.interpolate as interp
+from DamagedRegion import *
 
 class Member:
     def __init__(self, panel, loads = [0, 0, 0, 0, 0, 0], a = 300, b = 200):
@@ -276,7 +277,7 @@ class Member:
             # TODO: figure out wether to use cylindrical coordinates for this integral! it's a force equilibrium
             # the unit of the integral 'force' is in N per unit angle, as usually it would be in N per unit width if it
             # were a linear problem..
-            integral_value += Taur * stepsize
+            integral_value += Taur * r * stepsize
             integral_values.append(integral_value)
 
 
@@ -286,7 +287,7 @@ class Member:
         def func_to_solve(r):
             return self.Taurz(r, z) - Taucrit
 
-        # Find r values where Taurz equals specific_value
+        # Find r values where Taurz equals Taucrit
         roots = []
         try:
             # Use root_scalar to find the roots
@@ -296,7 +297,7 @@ class Member:
         except ValueError:
             pass
 
-        # It's known the function Taurz first goes above the specific value and then dips back down again
+        # It's known the function Taurz first goes above Taucrit and then dips back down again
         # We try to find the second root by searching beyond the first root
         if roots:
             try:
@@ -309,9 +310,9 @@ class Member:
         # Get the integral values at the roots
         integral_at_roots = [integral_interp(root) for root in roots]
 
-        # Now calculate the area above the Taucrit and left of Taucrit:
-        Areserve = roots[0]*Taucrit - integral_at_roots[0]
-        Aexcess = (integral_at_roots[1] - integral_at_roots[0]) - (roots[1]-roots[0]) * Taucrit
+        # Now calculate the area (quasi volume) above the Taucrit and left of Taucrit:
+        Areserve = (roots[0]**2) * Taucrit - integral_at_roots[0]
+        Aexcess = (integral_at_roots[1] - integral_at_roots[0]) - (roots[1]**2-roots[0]**2) * Taucrit
 
         # If Aexcess is smaller than Areserve, then the delamination length is simply the last root:
         if Aexcess < Areserve:
@@ -322,7 +323,7 @@ class Member:
 
         # -> find r at which the integral equals the area Taucrit * r:
         def AreaEq(r):
-            return integral_interp(r) - Taucrit * r
+            return integral_interp(r) - Taucrit * r**2
         result = opt.root_scalar(AreaEq, bracket=[roots[1], rmax-stepsize], method='brentq')
         delaminationlength = result.root
 
@@ -355,7 +356,6 @@ class Member:
         for angle in angles:
             delamination_lengths = self.DelaminationAnalysis(angle, 50)
             maxdelamination_length = max(delamination_lengths)
-            print(maxdelamination_length)
             lengths_angles.append(maxdelamination_length)
 
         # Find the maximum value in lengths_angles
@@ -387,16 +387,58 @@ class Member:
         # Return the major and minor axis directions
         return major_axis, minor_axis
 
-    def SublaminateBuilder(self):
-        # First make a list of all the lamina angles:
-        laminaangleslist = []
-        for lamina in self.panel:
-            laminaangleslist.append(lamina.theta)
+    def GenerateDamagedRegion(self):
+        # We need to make zones, and one zone has a number of delaminations:
+        delaminations = self.DelaminationAnalysis(0, 50)
 
+        # Now take out the zeros:
+        delaminationlengths = [value for value in delaminations if value != 0.0]
+        # Sort the list
+        delaminationlengths = sorted(delaminationlengths)
 
+        # Make the actual zones:
+        zones = []
+        for length in delaminationlengths:
+            # In the delaminations list, zet equal to zero those lengths that are shorter than
+            # current length:
+            zonedelaminations = [value if value >= length else 0.0 for value in delaminations]
+            # Now given these lengths generate the sublaminates:
+            zone = self.GenerateZone(zonedelaminations, length)
+            zones.append(zone)
 
-        Sublaminates = []
-        return Sublaminates
+        damagedregion = DamagedRegion(zones)
+        return damagedregion
+
+    def GenerateZone(self, delaminationlengths, length):
+        # make list of angles of the whole laminate:
+        angles = []
+        for lamina in self.panel.laminas:
+            angles.append(lamina.theta)
+
+        # Remove the first element
+        delaminationlengths = delaminationlengths[1:-1]
+        delaminationlengths.append(1)
+
+        # Now we have a list of angles which we just have to split at the delaminations:
+        sublaminates_angleslists = []
+        sublaminateangles = []
+        for index, length in enumerate(delaminationlengths):
+            if length == 0:
+                sublaminateangles.append(angles[index])
+            if length != 0:
+                sublaminateangles.append(angles[index])
+                sublaminates_angleslists.append(sublaminateangles)
+                sublaminateangles = []
+
+        print('sublaminates angles lists:')
+        print(sublaminates_angleslists)
+        sublaminates = []
+        for sublaminateangles in sublaminates_angleslists:
+            sublaminate = LaminateBuilder(sublaminateangles, False, False, 1)
+            sublaminates.append(sublaminate)
+
+        zone = Zone(sublaminates, length, self.panel.h)
+        return zone
 
     def plot_delamination(self, delaminationlengths):
         Rc = self.calculate_Rc()
@@ -419,10 +461,10 @@ class Member:
             if i == 0 or i == len(delaminationlengths) - 1:
                 continue  # Skip the top and bottom outer surfaces
             z = laminate.laminas[i - 1].z1  # Bottom of the current lamina
-            ax.plot([0, length], [z, z], color='blue', linewidth=2)
+            ax.plot([0, length], [z, z], color='black', linewidth=4)
 
         # Plotting the vertical black dashed line at Rc
-        ax.axvline(x=Rc, color='black', linestyle='--', label='Rc')
+        ax.axvline(x=Rc, color='grey', linestyle='--', label='Rc')
 
         ax.set_xlabel('Delamination Length (mm)')
         ax.set_ylabel('Ply Interface Position (z)')
@@ -444,7 +486,7 @@ class Member:
         plt.show()
 
 
-Laminate = LaminateBuilder([0, 90, 0, 0, 45, -45], True, True, 3)
+Laminate = LaminateBuilder([0, 90, 45, -45], True, True, 5)
 
 Member = Member(Laminate)
 impactforce = Member.impactforce(1000*30, 150, 100)
@@ -452,13 +494,17 @@ deflection = Member.compute_deflection(impactforce, 150, 100, 150, 100)
 print('Impact force: ', impactforce, 'N')
 print('Deflection at this load: ', deflection, 'mm')
 
-delamination_lengths = Member.DelaminationAnalysis(45, 20)
+delamination_lengths = Member.DelaminationAnalysis(0, 20)
 print(np.round(delamination_lengths, 2))
 
 Member.plot_delamination(delamination_lengths)
 Member.plot_Taurz(z=0, rmax=20)
+damagedregion = Member.GenerateDamagedRegion()
+print(np.round(damagedregion.E_reduced, 2))
+print(np.round(Member.panel.Ex, 2))
 
-print(Member.Major_Minor_axes())
+Member.Major_Minor_axes()
+
 
 
 
