@@ -92,7 +92,7 @@ class Member:
     def Eindentation(self, F):
         k = self.k_stiffness(self.R_impactor)
         deltamax = self.calculate_deltamax(F, k)
-        Eindentation =0.4*k*(deltamax)**0.4
+        Eindentation =0.4*k*(deltamax)**2.5
         return Eindentation
 
     def calculate_deltamax(self, F, k):
@@ -188,9 +188,16 @@ class Member:
         return Taurz
 
     def DelaminationAnalysis(self, azimuth, rmax):
+        """
+        Checks delaminations at a specific angle azimuth.
+
+        :param azimuth: -> angle at which we're making 'virtual cut' to look at delaminations
+        :param rmax: -> maximum r at which we do the delamination -> the larger this is the longer the analysis takes.
+        :returns: a list of delamination lengths from bottom to top of laminate
+        """
         # First run the following:
         # 1. self.impactforce()
-        # We don't run this everytime because it's time consuming!
+        # We don't run this everytime because it's time-consuming!
         rinterval = 0.001 # mm
 
         laminate = self.panel
@@ -198,6 +205,9 @@ class Member:
         # Delamination lengths should be a list with length of the laminas list +1, each lamina has 2 sides!
         # However, the top and bottom should always have length zero as there is no delamination possible on the outside
         delaminationlengths = [0 for _ in range(len(laminate.laminas) + 1)]
+
+        # we also define a 'last theta' -> angle of fibers at last lamina, (placeholder value = 0)
+        lasttheta = 0
 
         for laminaindex, lamina in enumerate(laminate.laminas):
             r = 0
@@ -225,7 +235,12 @@ class Member:
             if bottomdelamination_length > delaminationlengths[laminaindex]:
                 delaminationlengths[laminaindex] = bottomdelamination_length
 
-            # Only do delamination analysis if it's even possible for a delamiination to occur:
+            # However! if the current lamina has the same ply orientation as the previous (lamina below this), no delamination occurs!:
+            # -> overwrite last delamination length
+            if lamina.theta == lasttheta:
+                delaminationlengths[laminaindex] = 0
+
+            # Only do delamination analysis if it's even possible for a delamination to occur:
             if MaxTaurz1[0] > Taucrit:
                 topdelamination_length = Member.calculate_delamination_length(rmax, z1, Taucrit, MaxTaurz1[1])
             else:
@@ -242,7 +257,7 @@ class Member:
         :return:
         """
         # Create the array of data, Tau, r, integral of Tau as rows:
-        stepsize = 0.001
+        stepsize = 0.01
         r_values = np.arange(0, rmax, stepsize)
         n = len(r_values)
 
@@ -300,17 +315,14 @@ class Member:
 
         # If Aexcess is smaller than Areserve, then the delamination length is simply the last root:
         if Aexcess < Areserve:
-            print('Delamination length is at last root')
             return roots[1]
 
         # If this is not the case, we have to calculate at which point the force equilibrium has been reached,
         # Beyond the last root!
-        print('Delamination goes beyond last root')
 
         # -> find r at which the integral equals the area Taucrit * r:
         def AreaEq(r):
             return integral_interp(r) - Taucrit * r
-
         result = opt.root_scalar(AreaEq, bracket=[roots[1], rmax-stepsize], method='brentq')
         delaminationlength = result.root
 
@@ -335,6 +347,56 @@ class Member:
 
         MaxTaurz = self.Taurz(max_r, z)
         return MaxTaurz, max_r
+
+    # Now we have to find direction in which damaged area is largest:
+    def Major_Minor_axes(self):
+        angles = np.arange(0, 360, 5)
+        lengths_angles = []
+        for angle in angles:
+            delamination_lengths = self.DelaminationAnalysis(angle, 50)
+            maxdelamination_length = max(delamination_lengths)
+            print(maxdelamination_length)
+            lengths_angles.append(maxdelamination_length)
+
+        # Find the maximum value in lengths_angles
+        max_length = max(lengths_angles)
+
+        # Now find the angle at which the delamination is largest:
+        max_index = lengths_angles.index(max_length)
+
+        # Get the corresponding angle
+        major_axis = angles[max_index]
+        minor_axis = major_axis + 90
+
+        # Convert angles to radians for the polar plot
+        angles_radians = np.radians(angles)
+
+        # Create the polar plot
+        plt.figure()
+        ax = plt.subplot(111, polar=True)
+        ax.plot(angles_radians, lengths_angles)
+
+        # Optionally, you can add labels and a title
+        ax.set_title('Delamination Lengths vs. Angles')
+        ax.set_xlabel('Angle (degrees)')
+        ax.set_ylabel('Delamination Length')
+
+        # Show the plot
+        plt.show()
+
+        # Return the major and minor axis directions
+        return major_axis, minor_axis
+
+    def SublaminateBuilder(self):
+        # First make a list of all the lamina angles:
+        laminaangleslist = []
+        for lamina in self.panel:
+            laminaangleslist.append(lamina.theta)
+
+
+
+        Sublaminates = []
+        return Sublaminates
 
     def plot_delamination(self, delaminationlengths):
         Rc = self.calculate_Rc()
@@ -382,7 +444,7 @@ class Member:
         plt.show()
 
 
-Laminate = LaminateBuilder([0, 90, 45, -45], True, True, 5)
+Laminate = LaminateBuilder([0, 90, 0, 0, 45, -45], True, True, 3)
 
 Member = Member(Laminate)
 impactforce = Member.impactforce(1000*30, 150, 100)
@@ -396,7 +458,7 @@ print(np.round(delamination_lengths, 2))
 Member.plot_delamination(delamination_lengths)
 Member.plot_Taurz(z=0, rmax=20)
 
-print(Member.calculate_delamination_length(100, 0, 70, 3))
+print(Member.Major_Minor_axes())
 
 
 
