@@ -12,4 +12,5 @@ data_array = np.zeros((n, 3))
 # Fill the first column with the linspace array
 data_array[:, 0] = linspace_array
 
-print(data_array)
+list = []
+print(len(list))
