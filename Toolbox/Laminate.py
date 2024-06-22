@@ -124,7 +124,6 @@ class Laminate:
             max3 = max(Strains[2] - i.z0 * Strains[5], Strains[2] - i.z1 * Strains[5], key=abs)
             i.Epsilon = np.array([max1, max2, max3])
 
-
     def CalculateEquivalentProperties(self):
         # Here we calculate the engineering constants (or equivalent properties):
         self.Ex = (self.A_matrix[0, 0] * self.A_matrix[1, 1] - self.A_matrix[0, 1] ** 2) / (self.h * self.A_matrix[1, 1])
@@ -143,8 +142,6 @@ class Laminate:
         v12b = -D[0,1]/D[1,1]
         v21b = -D[0, 1] / D[0, 0]
         return [self.Ex, Ey, vxy, vyx, Gxy], [E1b, E2b, G12b, v12b, v21b]
-
-
 
     def StressAnalysis(self):
         # We need to make sure the lamina have strains:
@@ -344,6 +341,17 @@ class Laminate:
         # Transform the ABD matrix
         ABD_transformed = T_ext @ self.ABD_matrix @ T_ext.T
         return ABD_transformed
+
+    def NCrit(self, loadingratio):
+        """
+        Calculates critical load intensity for the laminate which would cause first ply failure.
+        Does NOT alter the failure state of the laminate.
+
+        Returns the crititcal load in N/mm given a load direction/ratio
+        :return:
+        """
+
+        return
 
 def LaminateBuilder(angleslist,symmetry, copycenter, multiplicity):
     if symmetry == True:

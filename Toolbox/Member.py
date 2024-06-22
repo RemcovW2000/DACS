@@ -406,8 +406,14 @@ class Member:
             zone = self.GenerateZone(zonedelaminations, length)
             zones.append(zone)
 
-        damagedregion = DamagedRegion(zones)
+        self.damagedregion = DamagedRegion(zones)
         return damagedregion
+
+    def CalculateCAI(self):
+        self.GenerateDamagedRegion()
+
+
+        return
 
     def GenerateZone(self, delaminationlengths, length):
         # make list of angles of the whole laminate:
@@ -503,7 +509,7 @@ damagedregion = Member.GenerateDamagedRegion()
 print(np.round(damagedregion.E_reduced, 2))
 print(np.round(Member.panel.Ex, 2))
 
-Member.Major_Minor_axes()
+# Member.Major_Minor_axes()
 
 
 
