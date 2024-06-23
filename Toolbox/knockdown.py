@@ -7,7 +7,7 @@ def CAI_laminate(Eave,Elaminate,E11,E22,v12,G12,R,w):
     '''
     Eave - average modulus of the damaged laminate 
     E11 -
-    R - radius 
+    R - radius
     w - width
     Make sure units are consistent
     '''

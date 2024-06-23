@@ -3,6 +3,7 @@ from tqdm import tqdm
 from Toolbox.Lamina import Lamina
 from Toolbox import MP
 import copy
+
 class Laminate:
     def __init__(self, laminas, Loads=None, Strains=None):
         # laminas is a python list of lamina objects, which make up the laminate.
@@ -127,12 +128,12 @@ class Laminate:
     def CalculateEquivalentProperties(self):
         # Here we calculate the engineering constants (or equivalent properties):
         self.Ex = (self.A_matrix[0, 0] * self.A_matrix[1, 1] - self.A_matrix[0, 1] ** 2) / (self.h * self.A_matrix[1, 1])
-        Ey = (self.A_matrix[0, 0] * self.A_matrix[1, 1] - self.A_matrix[0, 1] ** 2) / (self.h * self.A_matrix[0, 0])
+        self.Ey = (self.A_matrix[0, 0] * self.A_matrix[1, 1] - self.A_matrix[0, 1] ** 2) / (self.h * self.A_matrix[0, 0])
 
-        vxy = self.A_matrix[0, 1] / self.A_matrix[1, 1]
-        vyx = self.A_matrix[0, 1] / self.A_matrix[0, 0]
+        self.vxy = self.A_matrix[0, 1] / self.A_matrix[1, 1]
+        self.vyx = self.A_matrix[0, 1] / self.A_matrix[0, 0]
 
-        Gxy = self.A_matrix[2, 2] / self.h
+        self.Gxy = self.A_matrix[2, 2] / self.h
 
         D = np.linalg.inv(self.D_matrix)
 
@@ -141,7 +142,7 @@ class Laminate:
         G12b = 12 / (self.h ** 3 * D[2,2])
         v12b = -D[0,1]/D[1,1]
         v21b = -D[0, 1] / D[0, 0]
-        return [self.Ex, Ey, vxy, vyx, Gxy], [E1b, E2b, G12b, v12b, v21b]
+        return [self.Ex, self.Ey, self.vxy, self.vyx, self.Gxy], [E1b, E2b, G12b, v12b, v21b]
 
     def StressAnalysis(self):
         # We need to make sure the lamina have strains:
@@ -184,6 +185,12 @@ class Laminate:
         # We save the maximum failure factor in any of the lamina, to calculate the next loadstep:
         maxfailurefactor = np.max(FailureFactors)
         return self.FailureState, failedlamina, maxfailurefactor
+
+    def Ncrit(self):
+        maxfailurefactor = self.FailureAnalysis()[2]
+        print(self.Loads)
+        Ncrit = self.Loads / maxfailurefactor
+        return Ncrit
 
     def ProgressiveDamageAnalysis(self, loadingratio, loadincrement):
         # Normalize the loading ratio
@@ -341,17 +348,6 @@ class Laminate:
         # Transform the ABD matrix
         ABD_transformed = T_ext @ self.ABD_matrix @ T_ext.T
         return ABD_transformed
-
-    def NCrit(self, loadingratio):
-        """
-        Calculates critical load intensity for the laminate which would cause first ply failure.
-        Does NOT alter the failure state of the laminate.
-
-        Returns the crititcal load in N/mm given a load direction/ratio
-        :return:
-        """
-
-        return
 
 def LaminateBuilder(angleslist,symmetry, copycenter, multiplicity):
     if symmetry == True:

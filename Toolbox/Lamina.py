@@ -15,7 +15,7 @@ class Lamina:
                                            [1e-10, 1e-10, 1e-10, 1e-10]])
 
         # The following line determines whether the max stress criteria is used or puck:
-        self.MaxStress = True
+        self.MaxStress = False
 
         # geometric properties ply
         self.theta = theta

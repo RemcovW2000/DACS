@@ -6,22 +6,41 @@ import matplotlib.pyplot as plt
 import scipy.optimize as opt
 import scipy.interpolate as interp
 from DamagedRegion import *
+from tqdm import tqdm
 
 class Member:
-    def __init__(self, panel, loads = [0, 0, 0, 0, 0, 0], a = 300, b = 200):
+    def __init__(self, panel, Loads = [0, 0, 0, 0, 0, 0], a = 300, b = 200):
+        """"
+        This class makes a member: either a sandwich - or laminate object, with certain dimensions:
+        1. Width -> b
+        In direction of y-axis
+        2. Depth -> a
+        in direction of x-axis
+        3. thickness -> h
+        determined by layup
+        TODO: (3. curvature not implemented!)
+
+        Damage analysis:
+        1. run self.Fimpact() -> calculates force at impact
+
+
+        """
         self.panel = panel # could be either laminate or sandwich, both should work
                             # Sandwich impact would not work
-        self.loads = loads # total loads, not intensity!!!
+        self.Loads = Loads # total loads, not intensity!!!
         self.h = self.panel.h
 
-        self.a = a # panel width
-        self.b = b # panel depth
+        self.a = a # panel depth
+        self.b = b # panel width
 
         self.R_impactor = 6.35
         self.E_impactor = 200000  # MPa
         self.v_impactor = 0.28
 
-    def ShearBucklingFF(self):
+
+        self.BVID_energy = 0.113/25.4 # Joules per inch -> mm thickness
+
+    def ShearBucklingFI(self):
         D11 = self.panel.ABD_matrix[3, 3]
         D12 = self.panel.ABD_matrix[3, 4]
         D22 = self.panel.ABD_matrix[4, 4]
@@ -33,11 +52,52 @@ class Member:
         Nxypanel = 0.78 * term1 * (term2 + term3)
         return Nxypanel
 
-    def PanelFF(self):
-        # Calculate the failure state/factor of the panel itself, meaning FPF or crippling:
-        # Assuming symmetric laminates, so the force is split between laminates:
+    def PanelFI(self):
+        """
+        returns critical load in loading ratio of applied load. Load must be divided by width!
+        :return:
+        """
+        # Divide the x load by the width -> b
+        a = self.a
+        b = self.b
+        Loads = self.Loads
+        Nx = Loads[0]/b
+        Ny = Loads[1]/a
+        Ns = Loads[2]/b
+        Mx = Loads[3]/b
+        My = Loads[4]/a
+        Mz = Loads[5]/b # not sure abt this one!
 
-        return None
+        # Now we have load intensities:
+        Loadintensities = [Nx, Ny, Ns, Mx, My, Mz]
+        self.panel.Loads = Loadintensities
+        Ncrit = self.panel.Ncrit()
+        Fx = Ncrit[0]*b
+        Fy = Ncrit[1]*a
+        Fs = Ncrit[2]*b
+        Mx = Ncrit[3]*b
+        My = Ncrit[4]*a
+        Mz = Ncrit[5]*b
+
+        Fcrit = [Fx, Fy, Fs, Mx, My, Mz]
+        return Fcrit
+
+    def NormalBucklingFI(self):
+        """
+        In the current loading ratio, what is the critical load that would cause buckling?
+        :return:
+        """
+        D11 = self.panel.ABD_matrix[3, 3]
+        D12 = self.panel.ABD_matrix[3, 4]
+        D22 = self.panel.ABD_matrix[4, 4]
+        D66 = self.panel.ABD_matrix[5, 5]
+
+        term1 = (np.pi**2) / (self.a**2)
+        term2 = (D11 + 2 * (D12 + 2 * D66)) * (self.a ** 2 / self.b ** 2)
+        term3 = D22 * (self.a ** 4 / self.b ** 4)
+        Nxpanel = term1 * (term2 + term3)
+        Fxpanel = Nxpanel * self.b
+        return Fxpanel
 
     def deflection_single_term(self, F, m, n, xo, yo, x, y):
         a = self.a
@@ -192,13 +252,13 @@ class Member:
         """
         Checks delaminations at a specific angle azimuth.
 
+        First run self.impactforce() -> to find the force
+        We don't run this everytime because it's time-consuming!
+
         :param azimuth: -> angle at which we're making 'virtual cut' to look at delaminations
         :param rmax: -> maximum r at which we do the delamination -> the larger this is the longer the analysis takes.
         :returns: a list of delamination lengths from bottom to top of laminate
         """
-        # First run the following:
-        # 1. self.impactforce()
-        # We don't run this everytime because it's time-consuming!
         rinterval = 0.001 # mm
 
         laminate = self.panel
@@ -353,13 +413,14 @@ class Member:
     def Major_Minor_axes(self):
         angles = np.arange(0, 360, 5)
         lengths_angles = []
-        for angle in angles:
+        for angle in tqdm(angles, desc = 'Delamination at all angles:'):
             delamination_lengths = self.DelaminationAnalysis(angle, 50)
             maxdelamination_length = max(delamination_lengths)
             lengths_angles.append(maxdelamination_length)
 
         # Find the maximum value in lengths_angles
         max_length = max(lengths_angles)
+        self.RadiusDelamination = max_length
 
         # Now find the angle at which the delamination is largest:
         max_index = lengths_angles.index(max_length)
@@ -407,13 +468,35 @@ class Member:
             zones.append(zone)
 
         self.damagedregion = DamagedRegion(zones)
-        return damagedregion
+        return self.damagedregion
 
-    def CalculateCAI(self):
+    def CalculateCAI(self, knockdown):
         self.GenerateDamagedRegion()
+        E11 = self.panel.Ex
+        E22 = self.panel.Ey
+        v12 = self.panel.vxy
+        G12 = self.panel.Gxy
 
+        # Calculate the ratio between E moduli of laminate vs damaged region
+        Eave = self.damagedregion.E_reduced * knockdown
+        Elaminate = self.panel.Ex
+        l = Elaminate / Eave
 
-        return
+        # Find the size of the damage, we'll use the major axis in this case
+        R = self.RadiusDelamination
+        w = self.b
+
+        num = 1 + (l + (1 - l * v12 ** 2 * (E22 / E11)) * np.sqrt(2 * (np.sqrt(E11 / E22) - v12) + (E11 / G12))) + (
+                    (E11 / G12) - v12) * np.sqrt(E22 / E11)
+        den = 1 + l * (l + (1 + np.sqrt(E22 / E11) * np.sqrt(2 * (np.sqrt(E11 / E22) - v12) + (E11 / G12)))) + (
+                    (E11 / G12) - 2 * l * v12) * np.sqrt(E22 / E11) - (1 - l) ** 2 * v12 ** 2 * (E22 / E11)
+        SCF1 = 1 - (1 - l) * num / den
+
+        # Obtain the final stress concentration factor by compensating for the finite width:
+        SCF2 = (2 + (1 - (2 * R / w) ** 3)) / (3 * (1 - (2 * R / w))) * SCF1
+
+        # to be conservative, return the max factor of both:
+        return max(SCF1, SCF2)
 
     def GenerateZone(self, delaminationlengths, length):
         # make list of angles of the whole laminate:
@@ -436,8 +519,6 @@ class Member:
                 sublaminates_angleslists.append(sublaminateangles)
                 sublaminateangles = []
 
-        print('sublaminates angles lists:')
-        print(sublaminates_angleslists)
         sublaminates = []
         for sublaminateangles in sublaminates_angleslists:
             sublaminate = LaminateBuilder(sublaminateangles, False, False, 1)
@@ -491,25 +572,34 @@ class Member:
         plt.legend()
         plt.show()
 
+# Build a laminate
+Laminate = LaminateBuilder([45, -45, 45, -45, 0, 0, 90, 0, 0], True, True, 1)
 
-Laminate = LaminateBuilder([0, 90, 45, -45], True, True, 5)
-
+# Instantiate the Member object
 Member = Member(Laminate)
+
+# Assign loading ratio and find critical load:
+Member.Loads = [-1, 0, 0, 0, 0, 0]
+print(Member.PanelFI())
+print(Member.NormalBucklingFI())
+
+# define impact force:
 impactforce = Member.impactforce(1000*30, 150, 100)
 deflection = Member.compute_deflection(impactforce, 150, 100, 150, 100)
 print('Impact force: ', impactforce, 'N')
 print('Deflection at this load: ', deflection, 'mm')
 
-delamination_lengths = Member.DelaminationAnalysis(0, 20)
-print(np.round(delamination_lengths, 2))
+# delamination_lengths = Member.DelaminationAnalysis(0, 20)
+# Member.plot_delamination(delamination_lengths)
 
-Member.plot_delamination(delamination_lengths)
-Member.plot_Taurz(z=0, rmax=20)
+# Generate the damaged region:
 damagedregion = Member.GenerateDamagedRegion()
 print(np.round(damagedregion.E_reduced, 2))
 print(np.round(Member.panel.Ex, 2))
+Member.Major_Minor_axes()
+print(Member.CalculateCAI(0.7))
 
-# Member.Major_Minor_axes()
+
 
 
 
