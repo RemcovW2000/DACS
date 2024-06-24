@@ -131,8 +131,8 @@ class Member:
 
     def compute_deflection(self, F, xo, yo, x, y):
         # Number of terms in fourier series hardcoded for now:
-        max_m = 20
-        max_n = 20
+        max_m = 25
+        max_n = 25
 
         result = 0
         for m in range(1, max_m + 1):
@@ -174,22 +174,22 @@ class Member:
 
         K1 = (1-vi**2)/Ei
 
-        ABD = self.panel.ABD_matrix
-        A11 = ABD[0,0]
-        A22 = ABD[1,1]
-        A12 = ABD[0,1]
-
-        # Ask how to calculate this:
-        Gzr = 4500 # PLACEHOLDER!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-        term1 = np.sqrt(A22)
-        inner_term1 = np.sqrt(A11 * A22) + Gzr
-        inner_term2 = A12 + Gzr
-        numerator = term1 * np.sqrt(inner_term1 ** 2 - inner_term2 ** 2)
-
-        # Calculate components of the denominator
-        denominator = 2 * np.pi * np.sqrt(Gzr) * (A11 * A22 - A12 ** 2)
-        K2 = numerator / denominator
+        # ABD = self.panel.ABD_matrix
+        # A11 = ABD[0,0]
+        # A22 = ABD[1,1]
+        # A12 = ABD[0,1]
+        #
+        # # Ask how to calculate this:
+        # Gzr = 4500 # PLACEHOLDER!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        #
+        # term1 = np.sqrt(A22)
+        # inner_term1 = np.sqrt(A11 * A22) + Gzr
+        # inner_term2 = A12 + Gzr
+        # numerator = term1 * np.sqrt(inner_term1 ** 2 - inner_term2 ** 2)
+        #
+        # # Calculate components of the denominator
+        # denominator = 2 * np.pi * np.sqrt(Gzr) * (A11 * A22 - A12 ** 2)
+        # K2 = numerator / denominator
 
         K2 = (1-0.3**2)/11.2e3
         k = 4*np.sqrt(R)/(3*np.pi*(K1 + K2))
