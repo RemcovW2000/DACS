@@ -357,7 +357,6 @@ def LaminateBuilder(angleslist,symmetry, copycenter, multiplicity):
             angleslist = angleslist + angleslist[-2::-1]
     elif symmetry == False:
         angleslist = angleslist
-
     angleslist = angleslist * multiplicity
 
     # Define standard lamina:

@@ -6,8 +6,8 @@ v12 = 0.3      # From assignment
 elasticproperties = [E1, E2, G12, v12]
 
 # properties needed for failure analysis
-E11f = 6000   # TBD
-v21f = 0.1      # TBD
+E11f = 230000   # TBD
+v21f = 0.2      # TBD
 msf = 1.1       # TBD
 R11t = 2200     # From assignment
 R11c = 1800     # From assignment
@@ -17,7 +17,7 @@ S = 100       # From assignment
 
 failureproperties = [E11f, v21f, msf, R11t, R11c, yt, yc, S]
 
-t = 0.135       # mm ply thickness
+t = 0.2       # mm ply thickness
 rho = 0.00161   # 1g/mm3
 
 E1 = 142000     # From assignment

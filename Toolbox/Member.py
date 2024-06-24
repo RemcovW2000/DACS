@@ -5,7 +5,7 @@ from Toolbox.Laminate import Laminate, LaminateBuilder
 import matplotlib.pyplot as plt
 import scipy.optimize as opt
 import scipy.interpolate as interp
-from DamagedRegion import *
+from Toolbox.DamagedRegion import *
 from tqdm import tqdm
 
 class Member:
@@ -38,7 +38,7 @@ class Member:
         self.v_impactor = 0.28
 
 
-        self.BVID_energy = 0.113/25.4 # Joules per inch -> mm thickness
+        self.BVID_energy = 0.113*2000/25.4 # Joules per inch -> mm thickness
 
     def ShearBucklingFI(self):
         D11 = self.panel.ABD_matrix[3, 3]
@@ -92,12 +92,8 @@ class Member:
         D22 = self.panel.ABD_matrix[4, 4]
         D66 = self.panel.ABD_matrix[5, 5]
 
-        term1 = (np.pi**2) / (self.a**2)
-        term2 = (D11 + 2 * (D12 + 2 * D66)) * (self.a ** 2 / self.b ** 2)
-        term3 = D22 * (self.a ** 4 / self.b ** 4)
-        Nxpanel = term1 * (term2 + term3)
-        Fxpanel = Nxpanel * self.b
-        return Fxpanel
+        Fcrit = self.b * ((np.pi / self.a) ** 2 * (D11 + 2 * (D12 + 2 * D66) * (self.a/self.b) ** 2 + D22 * (self.a/self.b) ** 4))
+        return Fcrit
 
     def deflection_single_term(self, F, m, n, xo, yo, x, y):
         a = self.a
@@ -194,8 +190,11 @@ class Member:
     def Eimpact_estimate(self, F, xo, yo):
         return self.Eindentation(F) + self.Edeflection(F, xo, yo)
 
-    def impactforce(self, Eimpact, xo, yo, tol=1e-4, max_iter=1000):
+    def impactforce(self, xo, yo, tol=1e-4, max_iter=1000):
         # This function sets the attribute Fimpact and also returns the force
+        Eimpact = self.BVID_energy*self.panel.h*1000
+        print(self.panel.h)
+        print('BVID energy is:', np.round(Eimpact/1000, 1), 'Joules')
 
         # Let's also save the impact energy for which
         self.Eimpact = Eimpact
@@ -288,7 +287,7 @@ class Member:
 
             # Only do delamination analysis if it's even possible for a delamiination to occur:
             if MaxTaurz0[0] > Taucrit:
-                bottomdelamination_length = Member.calculate_delamination_length(rmax, z0, Taucrit, MaxTaurz0[1])
+                bottomdelamination_length = self.calculate_delamination_length(rmax, z0, Taucrit, MaxTaurz0[1])
             else:
                 bottomdelamination_length = 0
 
@@ -303,7 +302,7 @@ class Member:
 
             # Only do delamination analysis if it's even possible for a delamination to occur:
             if MaxTaurz1[0] > Taucrit:
-                topdelamination_length = Member.calculate_delamination_length(rmax, z1, Taucrit, MaxTaurz1[1])
+                topdelamination_length = self.calculate_delamination_length(rmax, z1, Taucrit, MaxTaurz1[1])
             else:
                 topdelamination_length = 0
 
@@ -571,35 +570,6 @@ class Member:
         plt.title(f'Taurz as a function of r at z={z}')
         plt.legend()
         plt.show()
-
-# Build a laminate
-Laminate = LaminateBuilder([45, -45, 45, -45, 0, 0, 90, 0, 0], True, True, 1)
-
-# Instantiate the Member object
-Member = Member(Laminate)
-
-# Assign loading ratio and find critical load:
-Member.Loads = [-1, 0, 0, 0, 0, 0]
-print(Member.PanelFI())
-print(Member.NormalBucklingFI())
-
-# define impact force:
-impactforce = Member.impactforce(1000*30, 150, 100)
-deflection = Member.compute_deflection(impactforce, 150, 100, 150, 100)
-print('Impact force: ', impactforce, 'N')
-print('Deflection at this load: ', deflection, 'mm')
-
-# delamination_lengths = Member.DelaminationAnalysis(0, 20)
-# Member.plot_delamination(delamination_lengths)
-
-# Generate the damaged region:
-damagedregion = Member.GenerateDamagedRegion()
-print(np.round(damagedregion.E_reduced, 2))
-print(np.round(Member.panel.Ex, 2))
-Member.Major_Minor_axes()
-print(Member.CalculateCAI(0.7))
-
-
 
 
 
