@@ -3,7 +3,7 @@ from Toolbox.Laminate import LaminateBuilder
 import numpy as np
 np.set_printoptions(precision=2, linewidth=1000)
 # Build a laminate
-Laminate = LaminateBuilder([45, -45, 0, 90], True, True, 2)
+Laminate = LaminateBuilder([45, -45, 45, -45, 45, -45, 45, -45, 0, 90, 0], True, True, 1)
 # Instantiate the Member object
 Member = Member(Laminate)
 
@@ -22,8 +22,6 @@ print('Deflection at this load: ', np.round(deflection, 1), 'mm')
 # Member.plot_delamination(delamination_lengths)
 
 # Generate the damaged region:
-damagedregion = Member.GenerateDamagedRegion()
-print(np.round(damagedregion.E_reduced, 2))
-print(np.round(Member.panel.Ex, 2))
+damagedregion = Member.GenerateDamagedRegion(50)
 Member.Major_Minor_axes()
-print(Member.CalculateCAI(0.7))
+print(Member.CalculateCAI(0.7, 50))

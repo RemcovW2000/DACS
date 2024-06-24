@@ -92,8 +92,16 @@ class Member:
         D22 = self.panel.ABD_matrix[4, 4]
         D66 = self.panel.ABD_matrix[5, 5]
 
-        Fcrit = self.b * ((np.pi / self.a) ** 2 * (D11 + 2 * (D12 + 2 * D66) * (self.a/self.b) ** 2 + D22 * (self.a/self.b) ** 4))
-        return Fcrit
+        Fcrits = []
+        for m in range(1, 6):
+            Fcrit = self.b * ((np.pi / self.a) ** 2 * (D11*m**2 + 2 * (D12 + 2 * D66) * (self.a/self.b) ** 2 + (D22/m**2) * (self.a/self.b) ** 4))
+            Fcrits.append(Fcrit)
+
+        Fcrit_min = min(Fcrits)
+        min_index = Fcrits.index(Fcrit_min)
+        min_mode = min_index+1
+        print(min_mode)
+        return Fcrit_min
 
     def deflection_single_term(self, F, m, n, xo, yo, x, y):
         a = self.a
@@ -413,7 +421,7 @@ class Member:
         angles = np.arange(0, 360, 5)
         lengths_angles = []
         for angle in tqdm(angles, desc = 'Delamination at all angles:'):
-            delamination_lengths = self.DelaminationAnalysis(angle, 50)
+            delamination_lengths = self.DelaminationAnalysis(angle, 200)
             maxdelamination_length = max(delamination_lengths)
             lengths_angles.append(maxdelamination_length)
 
@@ -447,9 +455,9 @@ class Member:
         # Return the major and minor axis directions
         return major_axis, minor_axis
 
-    def GenerateDamagedRegion(self):
+    def GenerateDamagedRegion(self,rmax):
         # We need to make zones, and one zone has a number of delaminations:
-        delaminations = self.DelaminationAnalysis(0, 50)
+        delaminations = self.DelaminationAnalysis(0,  rmax)
 
         # Now take out the zeros:
         delaminationlengths = [value for value in delaminations if value != 0.0]
@@ -469,8 +477,8 @@ class Member:
         self.damagedregion = DamagedRegion(zones)
         return self.damagedregion
 
-    def CalculateCAI(self, knockdown):
-        self.GenerateDamagedRegion()
+    def CalculateCAI(self, knockdown, rmax):
+        self.GenerateDamagedRegion(rmax)
         E11 = self.panel.Ex
         E22 = self.panel.Ey
         v12 = self.panel.vxy
@@ -493,9 +501,7 @@ class Member:
 
         # Obtain the final stress concentration factor by compensating for the finite width:
         SCF2 = (2 + (1 - (2 * R / w) ** 3)) / (3 * (1 - (2 * R / w))) * SCF1
-
-        # to be conservative, return the max factor of both:
-        return max(SCF1, SCF2)
+        return SCF2
 
     def GenerateZone(self, delaminationlengths, length):
         # make list of angles of the whole laminate:
