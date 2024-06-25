@@ -92,8 +92,16 @@ class Member:
         D22 = self.panel.ABD_matrix[4, 4]
         D66 = self.panel.ABD_matrix[5, 5]
 
-        Fcrit = self.b * ((np.pi / self.a) ** 2 * (D11 + 2 * (D12 + 2 * D66) * (self.a/self.b) ** 2 + D22 * (self.a/self.b) ** 4))
-        return Fcrit
+        Fcrits = []
+        for m in range(1, 6):
+            Fcrit = self.b * ((np.pi / self.a) ** 2 * (D11*m**2 + 2 * (D12 + 2 * D66) * (self.a/self.b) ** 2 + (D22/m**2) * (self.a/self.b) ** 4))
+            Fcrits.append(Fcrit)
+
+        Fcrit_min = min(Fcrits)
+        min_index = Fcrits.index(Fcrit_min)
+        min_mode = min_index+1
+        print(min_mode)
+        return Fcrit_min
 
     def deflection_single_term(self, F, m, n, xo, yo, x, y):
         a = self.a
@@ -123,8 +131,8 @@ class Member:
 
     def compute_deflection(self, F, xo, yo, x, y):
         # Number of terms in fourier series hardcoded for now:
-        max_m = 20
-        max_n = 20
+        max_m = 25
+        max_n = 25
 
         result = 0
         for m in range(1, max_m + 1):
@@ -166,22 +174,22 @@ class Member:
 
         K1 = (1-vi**2)/Ei
 
-        ABD = self.panel.ABD_matrix
-        A11 = ABD[0,0]
-        A22 = ABD[1,1]
-        A12 = ABD[0,1]
-
-        # Ask how to calculate this:
-        Gzr = 4500 # PLACEHOLDER!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-        term1 = np.sqrt(A22)
-        inner_term1 = np.sqrt(A11 * A22) + Gzr
-        inner_term2 = A12 + Gzr
-        numerator = term1 * np.sqrt(inner_term1 ** 2 - inner_term2 ** 2)
-
-        # Calculate components of the denominator
-        denominator = 2 * np.pi * np.sqrt(Gzr) * (A11 * A22 - A12 ** 2)
-        K2 = numerator / denominator
+        # ABD = self.panel.ABD_matrix
+        # A11 = ABD[0,0]
+        # A22 = ABD[1,1]
+        # A12 = ABD[0,1]
+        #
+        # # Ask how to calculate this:
+        # Gzr = 4500 # PLACEHOLDER!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        #
+        # term1 = np.sqrt(A22)
+        # inner_term1 = np.sqrt(A11 * A22) + Gzr
+        # inner_term2 = A12 + Gzr
+        # numerator = term1 * np.sqrt(inner_term1 ** 2 - inner_term2 ** 2)
+        #
+        # # Calculate components of the denominator
+        # denominator = 2 * np.pi * np.sqrt(Gzr) * (A11 * A22 - A12 ** 2)
+        # K2 = numerator / denominator
 
         K2 = (1-0.3**2)/11.2e3
         k = 4*np.sqrt(R)/(3*np.pi*(K1 + K2))
@@ -232,11 +240,9 @@ class Member:
             if r == 0:
                 r = 1e-10
             a = 1/Rc**2
-            term1 = 3*a*Ftotal
-            term2 = 1/(3*a)
-            numerator = (1-a*r**2)**1.5
-            denominator = 3*a
-            Fr = term1*(term2 -numerator/denominator)
+            term1 = Ftotal
+            term2 = (1-a*r**2)**1.5
+            Fr = term1*(1 - term2)
             Tauavg = Fr/(2*np.pi*r*self.h)
         elif r >= Rc:
             Tauavg = Ftotal/(2*np.pi*r*self.h)
@@ -270,10 +276,6 @@ class Member:
         lasttheta = 0
 
         for laminaindex, lamina in enumerate(laminate.laminas):
-            r = 0
-            prev_topDL = True
-            prev_botDL = True
-
             # We need the interlaminar shear strength of the plies in the azimuth direction:
             Taucrit = lamina.Taucrit(azimuth)
 
@@ -309,6 +311,8 @@ class Member:
             # only add the delamination if the delamination is greater than previously found
             if topdelamination_length > delaminationlengths[laminaindex + 1]:
                 delaminationlengths[laminaindex + 1] = topdelamination_length
+
+            lasttheta = lamina.theta
         return delaminationlengths
 
     def calculate_delamination_length(self, rmax, z, Taucrit, r_maxTau):
@@ -317,7 +321,7 @@ class Member:
         :return:
         """
         # Create the array of data, Tau, r, integral of Tau as rows:
-        stepsize = 0.01
+        stepsize = 0.001
         r_values = np.arange(0, rmax, stepsize)
         n = len(r_values)
 
@@ -413,7 +417,7 @@ class Member:
         angles = np.arange(0, 360, 5)
         lengths_angles = []
         for angle in tqdm(angles, desc = 'Delamination at all angles:'):
-            delamination_lengths = self.DelaminationAnalysis(angle, 50)
+            delamination_lengths = self.DelaminationAnalysis(angle, 200)
             maxdelamination_length = max(delamination_lengths)
             lengths_angles.append(maxdelamination_length)
 
@@ -447,9 +451,9 @@ class Member:
         # Return the major and minor axis directions
         return major_axis, minor_axis
 
-    def GenerateDamagedRegion(self):
+    def GenerateDamagedRegion(self,rmax):
         # We need to make zones, and one zone has a number of delaminations:
-        delaminations = self.DelaminationAnalysis(0, 50)
+        delaminations = self.DelaminationAnalysis(0,  rmax)
 
         # Now take out the zeros:
         delaminationlengths = [value for value in delaminations if value != 0.0]
@@ -469,8 +473,8 @@ class Member:
         self.damagedregion = DamagedRegion(zones)
         return self.damagedregion
 
-    def CalculateCAI(self, knockdown):
-        self.GenerateDamagedRegion()
+    def CalculateCAI(self, knockdown, rmax):
+        self.GenerateDamagedRegion(rmax)
         E11 = self.panel.Ex
         E22 = self.panel.Ey
         v12 = self.panel.vxy
@@ -493,9 +497,7 @@ class Member:
 
         # Obtain the final stress concentration factor by compensating for the finite width:
         SCF2 = (2 + (1 - (2 * R / w) ** 3)) / (3 * (1 - (2 * R / w))) * SCF1
-
-        # to be conservative, return the max factor of both:
-        return max(SCF1, SCF2)
+        return SCF2
 
     def GenerateZone(self, delaminationlengths, length):
         # make list of angles of the whole laminate:
@@ -526,11 +528,11 @@ class Member:
         zone = Zone(sublaminates, length, self.panel.h)
         return zone
 
-    def plot_delamination(self, delaminationlengths):
+    def plot_delamination(self, delaminationlengths, azimuth):
         Rc = self.calculate_Rc()
         fig, ax = plt.subplots()
         laminate = self.panel
-
+        print(np.round(delaminationlengths, 2))
         # Set x-limit beyond Rc
         xlim_value = max(delaminationlengths) * 2
         ax.set_xlim(0, xlim_value)
@@ -554,20 +556,33 @@ class Member:
 
         ax.set_xlabel('Delamination Length (mm)')
         ax.set_ylabel('Ply Interface Position (z)')
-        ax.set_title('Delamination Analysis')
+        ax.set_title('Delamination Analysis at angle {}'.format(azimuth))
         plt.legend()
         plt.show()
 
     def plot_Taurz(self, z, rmax):
         r_values = np.linspace(0, rmax, 1000)
         Taurz_values = [self.Taurz(r, z) for r in r_values]
-
         plt.figure()
         plt.plot(r_values, Taurz_values, label=f'Taurz at z={z}')
         plt.axvline(x=self.calculate_Rc(), color='black', linestyle='--', label='Rc')
         plt.xlabel('r (mm)')
         plt.ylabel('Taurz')
         plt.title(f'Taurz as a function of r at z={z}')
+        plt.legend()
+        plt.show()
+
+    def plot_ForceEquilibrium(self, z, rmax):
+        r_values = np.linspace(0, rmax, 1000)
+        Taurz_values = [self.Taurz(r, z) * r for r in r_values]
+        Srz_values = [92 * r for r in r_values]
+        plt.figure()
+        plt.plot(r_values, Taurz_values, label=f'Taurz*r at z={z}')
+        plt.plot(r_values, Srz_values, label=f'Srz*R at z={z}')
+        plt.axvline(x=self.calculate_Rc(), color='black', linestyle='--', label='Rc')
+        plt.xlabel('r (mm)')
+        plt.ylabel('Taurz*r, Srz*r')
+        plt.title(f'Integrands as a function of r at z={z}')
         plt.legend()
         plt.show()
 
