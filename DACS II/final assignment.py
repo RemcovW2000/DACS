@@ -3,6 +3,7 @@ from Toolbox.Laminate import LaminateBuilder
 import numpy as np
 np.set_printoptions(precision=2, linewidth=1000)
 # Build a laminate
+#1st: symmetrc, 2nd: copy center, number muciplicity 
 Laminate = LaminateBuilder([45, -45, 0, 90], True, True, 2)
 # Instantiate the Member object
 Member = Member(Laminate)
