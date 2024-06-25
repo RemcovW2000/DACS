@@ -18,10 +18,13 @@ deflection = Member.compute_deflection(impactforce, 150, 100, 150, 100)
 print('Impact force: ', np.round(impactforce, 1), 'N')
 print('Deflection at this load: ', np.round(deflection, 1), 'mm')
 
-# delamination_lengths = Member.DelaminationAnalysis(0, 20)
-# Member.plot_delamination(delamination_lengths)
+Member.plot_Taurz(0, 12)
+Member.plot_ForceEquilibrium(0, 8)
+azimuth = 0
+delamination_lengths = Member.DelaminationAnalysis(azimuth, 20)
+Member.plot_delamination(delamination_lengths, azimuth)
 
 # Generate the damaged region:
-damagedregion = Member.GenerateDamagedRegion(50)
-Member.Major_Minor_axes()
-print(Member.CalculateCAI(0.7, 50))
+# damagedregion = Member.GenerateDamagedRegion(50)
+# Member.Major_Minor_axes()
+# print(Member.CalculateCAI(0.7, 50))

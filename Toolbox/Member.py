@@ -240,11 +240,9 @@ class Member:
             if r == 0:
                 r = 1e-10
             a = 1/Rc**2
-            term1 = 3*a*Ftotal
-            term2 = 1/(3*a)
-            numerator = (1-a*r**2)**1.5
-            denominator = 3*a
-            Fr = term1*(term2 -numerator/denominator)
+            term1 = Ftotal
+            term2 = (1-a*r**2)**1.5
+            Fr = term1*(1 - term2)
             Tauavg = Fr/(2*np.pi*r*self.h)
         elif r >= Rc:
             Tauavg = Ftotal/(2*np.pi*r*self.h)
@@ -278,10 +276,6 @@ class Member:
         lasttheta = 0
 
         for laminaindex, lamina in enumerate(laminate.laminas):
-            r = 0
-            prev_topDL = True
-            prev_botDL = True
-
             # We need the interlaminar shear strength of the plies in the azimuth direction:
             Taucrit = lamina.Taucrit(azimuth)
 
@@ -317,6 +311,8 @@ class Member:
             # only add the delamination if the delamination is greater than previously found
             if topdelamination_length > delaminationlengths[laminaindex + 1]:
                 delaminationlengths[laminaindex + 1] = topdelamination_length
+
+            lasttheta = lamina.theta
         return delaminationlengths
 
     def calculate_delamination_length(self, rmax, z, Taucrit, r_maxTau):
@@ -325,7 +321,7 @@ class Member:
         :return:
         """
         # Create the array of data, Tau, r, integral of Tau as rows:
-        stepsize = 0.01
+        stepsize = 0.001
         r_values = np.arange(0, rmax, stepsize)
         n = len(r_values)
 
@@ -532,11 +528,11 @@ class Member:
         zone = Zone(sublaminates, length, self.panel.h)
         return zone
 
-    def plot_delamination(self, delaminationlengths):
+    def plot_delamination(self, delaminationlengths, azimuth):
         Rc = self.calculate_Rc()
         fig, ax = plt.subplots()
         laminate = self.panel
-
+        print(np.round(delaminationlengths, 2))
         # Set x-limit beyond Rc
         xlim_value = max(delaminationlengths) * 2
         ax.set_xlim(0, xlim_value)
@@ -560,20 +556,33 @@ class Member:
 
         ax.set_xlabel('Delamination Length (mm)')
         ax.set_ylabel('Ply Interface Position (z)')
-        ax.set_title('Delamination Analysis')
+        ax.set_title('Delamination Analysis at angle {}'.format(azimuth))
         plt.legend()
         plt.show()
 
     def plot_Taurz(self, z, rmax):
         r_values = np.linspace(0, rmax, 1000)
         Taurz_values = [self.Taurz(r, z) for r in r_values]
-
         plt.figure()
         plt.plot(r_values, Taurz_values, label=f'Taurz at z={z}')
         plt.axvline(x=self.calculate_Rc(), color='black', linestyle='--', label='Rc')
         plt.xlabel('r (mm)')
         plt.ylabel('Taurz')
         plt.title(f'Taurz as a function of r at z={z}')
+        plt.legend()
+        plt.show()
+
+    def plot_ForceEquilibrium(self, z, rmax):
+        r_values = np.linspace(0, rmax, 1000)
+        Taurz_values = [self.Taurz(r, z) * r for r in r_values]
+        Srz_values = [92 * r for r in r_values]
+        plt.figure()
+        plt.plot(r_values, Taurz_values, label=f'Taurz*r at z={z}')
+        plt.plot(r_values, Srz_values, label=f'Srz*R at z={z}')
+        plt.axvline(x=self.calculate_Rc(), color='black', linestyle='--', label='Rc')
+        plt.xlabel('r (mm)')
+        plt.ylabel('Taurz*r, Srz*r')
+        plt.title(f'Integrands as a function of r at z={z}')
         plt.legend()
         plt.show()
 
