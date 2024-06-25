@@ -43,8 +43,7 @@ class DamagedRegion:
                 d_inner            = self.zones[i-1].width        # delamination length defining enclosed zone
                 d_outer            = zone.width                   # delamination length defining current zone
                 zone.E_equivalent  = E_eq_enclosed * zone.E_parallel / (E_eq_enclosed * (1 - d_inner/d_outer) + zone.E_parallel*(d_inner/d_outer))
-
-        
+            print(zone.E_equivalent)
         E_reduced = self.zones[-1].E_equivalent
 
         return E_reduced

@@ -264,7 +264,7 @@ class Member:
         :param rmax: -> maximum r at which we do the delamination -> the larger this is the longer the analysis takes.
         :returns: a list of delamination lengths from bottom to top of laminate
         """
-        rinterval = 0.001 # mm
+        rinterval = 0.01 # mm
 
         laminate = self.panel
 
@@ -321,7 +321,7 @@ class Member:
         :return:
         """
         # Create the array of data, Tau, r, integral of Tau as rows:
-        stepsize = 0.001
+        stepsize = 0.005
         r_values = np.arange(0, rmax, stepsize)
         n = len(r_values)
 
@@ -414,10 +414,13 @@ class Member:
 
     # Now we have to find direction in which damaged area is largest:
     def Major_Minor_axes(self):
-        angles = np.arange(0, 360, 5)
+        # ----------------------------------------------------------------------------
+        # finding max delamination length:
+        # ----------------------------------------------------------------------------
+        angles = np.arange(0, 365, 5)
         lengths_angles = []
         for angle in tqdm(angles, desc = 'Delamination at all angles:'):
-            delamination_lengths = self.DelaminationAnalysis(angle, 200)
+            delamination_lengths = self.DelaminationAnalysis(angle, 15)
             maxdelamination_length = max(delamination_lengths)
             lengths_angles.append(maxdelamination_length)
 
@@ -432,21 +435,27 @@ class Member:
         major_axis = angles[max_index]
         minor_axis = major_axis + 90
 
-        # Convert angles to radians for the polar plot
-        angles_radians = np.radians(angles)
-
-        # Create the polar plot
-        plt.figure()
-        ax = plt.subplot(111, polar=True)
-        ax.plot(angles_radians, lengths_angles)
-
-        # Optionally, you can add labels and a title
-        ax.set_title('Delamination Lengths vs. Angles')
-        ax.set_xlabel('Angle (degrees)')
-        ax.set_ylabel('Delamination Length')
-
-        # Show the plot
-        plt.show()
+        # # Convert angles to radians for the polar plot
+        # angles_radians = np.radians(angles)
+        #
+        # # Create the polar plot
+        # plt.figure()
+        # ax = plt.subplot(111, polar=True)
+        # # ax.plot(angles_radians, lengths_angles)
+        #
+        # data = [self.DelaminationAnalysis(angle, 15) for angle in angles]
+        # # Plot each index of the returned lists
+        # for i in range(len(data[0])):
+        #     values = [d[i] for d in data]
+        #     ax.plot(angles_radians, values, label=f'Index {i}')
+        #
+        # # Optionally, you can add labels and a title
+        # ax.set_title('Delamination Lengths vs. Angles')
+        # ax.set_xlabel('Angle (degrees)')
+        # ax.set_ylabel('Delamination Length')
+        #
+        # # Show the plot
+        # plt.show()
 
         # Return the major and minor axis directions
         return major_axis, minor_axis
@@ -499,7 +508,7 @@ class Member:
         SCF2 = (2 + (1 - (2 * R / w) ** 3)) / (3 * (1 - (2 * R / w))) * SCF1
         return SCF2
 
-    def GenerateZone(self, delaminationlengths, length):
+    def GenerateZone(self, delaminationlengths, length1):
         # make list of angles of the whole laminate:
         angles = []
         for lamina in self.panel.laminas:
@@ -524,8 +533,7 @@ class Member:
         for sublaminateangles in sublaminates_angleslists:
             sublaminate = LaminateBuilder(sublaminateangles, False, False, 1)
             sublaminates.append(sublaminate)
-
-        zone = Zone(sublaminates, length, self.panel.h)
+        zone = Zone(sublaminates, length1, self.panel.h)
         return zone
 
     def plot_delamination(self, delaminationlengths, azimuth):
@@ -554,8 +562,8 @@ class Member:
         # Plotting the vertical black dashed line at Rc
         ax.axvline(x=Rc, color='grey', linestyle='--', label='Rc')
 
-        ax.set_xlabel('Delamination Length (mm)')
-        ax.set_ylabel('Ply Interface Position (z)')
+        ax.set_xlabel('r (mm)')
+        ax.set_ylabel('Ply Interface Position (z), (mm)')
         ax.set_title('Delamination Analysis at angle {}'.format(azimuth))
         plt.legend()
         plt.show()
