@@ -188,7 +188,6 @@ class Laminate:
 
     def Ncrit(self):
         maxfailurefactor = self.FailureAnalysis()[2]
-        print(self.Loads)
         Ncrit = self.Loads / maxfailurefactor
         return Ncrit
 

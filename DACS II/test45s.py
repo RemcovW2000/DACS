@@ -4,7 +4,7 @@ import numpy as np
 np.set_printoptions(precision=2, linewidth=1000)
 # Build a laminate
 #1st: symmetrc, 2nd: copy center, number muciplicity
-Laminate = LaminateBuilder([45, -45, 45, -45, 45, -45, 45, -45, 0, 90, 0], True, True, 1)
+Laminate = LaminateBuilder([45, -45, 45, -45, 45, -45, 45, -45, 45, -45, 45, -45], True, True, 1)
 print(Laminate.Ex)
 # >>>>>>> 82b0b2dd12e2ccb3e857e22a392d0e4efdf24b56
 # Instantiate the Member object
@@ -16,8 +16,8 @@ print(np.round(Member.PanelFI(), 0))
 print(Member.NormalBucklingFI())
 
 # define impact force:
-impactforce = Member.impactforce(50, 50)
-deflection = Member.compute_deflection(impactforce, 50, 50, 50, 50)
+impactforce = Member.impactforce(150, 100)
+deflection = Member.compute_deflection(impactforce, 150, 100, 150, 100)
 print('Impact force: ', np.round(impactforce, 1), 'N')
 print('Deflection at this load: ', np.round(deflection, 1), 'mm')
 

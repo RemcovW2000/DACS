@@ -190,8 +190,8 @@ class Member:
         # # Calculate components of the denominator
         # denominator = 2 * np.pi * np.sqrt(Gzr) * (A11 * A22 - A12 ** 2)
         # K2 = numerator / denominator
-
-        K2 = (1-0.3**2)/11.2e3
+        vo = (0.3+0.45)/2
+        K2 = (1-vo**2)/11.2e3
         k = 4*np.sqrt(R)/(3*np.pi*(K1 + K2))
         return k
 
@@ -201,7 +201,6 @@ class Member:
     def impactforce(self, xo, yo, tol=1e-4, max_iter=1000):
         # This function sets the attribute Fimpact and also returns the force
         Eimpact = self.BVID_energy*self.panel.h*1000
-        print(self.panel.h)
         print('BVID energy is:', np.round(Eimpact/1000, 1), 'Joules')
 
         # Let's also save the impact energy for which
@@ -540,7 +539,6 @@ class Member:
         Rc = self.calculate_Rc()
         fig, ax = plt.subplots()
         laminate = self.panel
-        print(np.round(delaminationlengths, 2))
         # Set x-limit beyond Rc
         xlim_value = max(delaminationlengths) * 2
         ax.set_xlim(0, xlim_value)
