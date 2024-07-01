@@ -26,19 +26,29 @@ class Member:
 
         """
         self.panel = panel # could be either laminate or sandwich, both should work
-                            # Sandwich impact would not work
         self.Loads = Loads # total loads, not intensity!!!
         self.h = self.panel.h
 
-        self.a = a # panel depth
-        self.b = b # panel width
+        self.startcoord = [] # from leading to trailing edge for wing
+        self.endcoord = [] # from leading to trailing edge for wing
+        if not self.startcoord:
+            self.b = b # panel width
+        self.a = a  # panel depth
 
+        # ----------------------------------------------------------------
+        # Dacs II: impact
         self.R_impactor = 6.35
         self.E_impactor = 200000  # MPa
         self.v_impactor = 0.28
 
-
         self.BVID_energy = 0.113*2000/25.4 # Joules per inch -> mm thickness
+        # ----------------------------------------------------------------
+
+    def Calculate_b(self):
+        x1, y1 = self.startcoord
+        x2, y2 = self.endcoord
+        self.b = np.sqrt((x2-x1)**2 + (y2-y1)**2)
+        return self.b
 
     def ShearBucklingFI(self):
         D11 = self.panel.ABD_matrix[3, 3]
@@ -141,8 +151,8 @@ class Member:
         return result
 
 # ----------------------------------------------------------------------------------------------------------------------
-# DACS II impact damage:
-    # Find the force:
+#       DACS II impact damage:
+#       Find the force:
 # ----------------------------------------------------------------------------------------------------------------------
     def Edeflection(self, F, xo, yo):
         # For the deflection energy we analyse the work done at location of impact so
