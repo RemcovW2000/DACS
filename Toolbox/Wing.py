@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d
+from Airfoil import Airfoil
 
 class Wing:
     def __init__(self, liftdistribution, coorddistribution, LElocations, thicknessdistribution, halfspan, ribcoordinates, sparcoordinates, airfoilcoords):
@@ -146,17 +147,28 @@ class Wing:
         moment_interp = interp1d(y, self.moment_distribution_internal, kind='linear')
         return moment_interp(location)
 
-    def Cross_sectional_analysis(self, y):
+    def topmembers_at(self, y):
+        # for a given location y, there must be members defined ->
+        return
+
+    def botmembers_at(self, y):
+        return
+
+    def curvatures_at(self, y):
         """
         Does analysis of a cross section of the wing at location y along the half span
         :return:
         """
-        shear = self.shear_at(y)
         moment = self.moment_at(y)
-        spars = [] # list of spar locations? or of objects? these indicate the locations of the spars for
+        spars = self.spar_positions_at(y) # list of spar locations? or of objects? these indicate the locations of the spars for
                     # cross sectional analysis
-
-        return
+        thickness = self.thickness_at(y)
+        chordlength = self.chord_at(y)
+        topmembers = self.topmembers_at(y)
+        botmembers = self.botmembers_at(y)
+        airfoil = Airfoil('e395-il', thickness, chordlength, spars, topmembers, botmembers)
+        kx, ky = airfoil.curvatures(moment, 0)
+        return kx, ky
 
     def spar_positions_at(self, location):
         """
@@ -220,6 +232,10 @@ class Wing:
         """
         return
 
+    def Deflection(self):
+
+        return
+
 def generate_chord_and_leading_edge(n, halfspan, coord_at_root):
     y = np.linspace(0, halfspan, n)
     chord_lengths = coord_at_root * np.sqrt(1 - (y / halfspan) ** 2)
@@ -258,7 +274,7 @@ wing = Wing(liftdistribution, chord_lengths, leading_edge_locations, thicknessdi
 moment_distribution = wing.internal_moment()
 shear_distribution = wing.shear_force()
 
-location = 1000  # Example location along the half span
+location = 100  # Example location along the half span
 shear_at_location = wing.shear_at(location)
 moment_at_location = wing.moment_at(location)
 spar_positions = wing.spar_positions_at(location)

@@ -34,6 +34,7 @@ class Member:
         if not self.startcoord:
             self.b = b # panel width
         self.a = a  # panel depth
+        self.curvealongx = None
 
         # ----------------------------------------------------------------
         # Dacs II: impact
