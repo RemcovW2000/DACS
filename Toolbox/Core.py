@@ -1,7 +1,7 @@
 import numpy as np
 class Core:
-    def __init__(self, thickness, coreproperties):
-        self.thickness = thickness
+    def __init__(self, h, coreproperties):
+        self.h = h
         self.coreproperties = coreproperties
 
     def Gxbarz(self, theta):

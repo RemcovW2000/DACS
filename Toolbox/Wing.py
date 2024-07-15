@@ -1,10 +1,12 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d
-from Airfoil import Airfoil
+from Toolbox.Airfoil import Airfoil
+from Toolbox.Member import Member
+from Data.Panels import PanelWingRoot
 
 class Wing:
-    def __init__(self, liftdistribution, coorddistribution, LElocations, thicknessdistribution, halfspan, ribcoordinates, sparcoordinates, airfoilcoords):
+    def __init__(self, liftdistribution, coorddistribution, LElocations, thicknessdistribution, halfspan, ribcoordinates, sparcoordinates):
         """
         :param airfoilcoords: list
         - list containing 2 lists
@@ -42,9 +44,10 @@ class Wing:
         self.LElocations = LElocations
         self.thicknessdistribution = thicknessdistribution # list
         self.halfspan = halfspan  # float
-        self.airfoilcoords = airfoilcoords
         self.sparcoordinates = sparcoordinates
         self.ribcoordinates = ribcoordinates
+        self.toppanels = []
+        self.botpanels = []
 
     def lift_at(self, y):
         """
@@ -73,7 +76,7 @@ class Wing:
         :return: float
         """
         listofpoints = np.linspace(0, self.halfspan, len(self.chorddistribution))
-        LE_interp = interp1d(listofpoints, self.liftdistribution, kind='linear')
+        LE_interp = interp1d(listofpoints, self.chorddistribution, kind='linear')
         return LE_interp(y)
 
     def thickness_at(self, y):
@@ -83,7 +86,7 @@ class Wing:
         :return: float
         """
         listofpoints = np.linspace(0, self.halfspan, len(self.thicknessdistribution))
-        thickness_interp = interp1d(listofpoints, self.liftdistribution, kind='linear')
+        thickness_interp = interp1d(listofpoints, self.thicknessdistribution, kind='linear')
         return thickness_interp(y)
 
     def internal_moment(self):
@@ -147,12 +150,26 @@ class Wing:
         moment_interp = interp1d(y, self.moment_distribution_internal, kind='linear')
         return moment_interp(location)
 
+    def panels_at(self, objects_list, coordinate):
+        for panel, end_coordinate in objects_list:
+            if coordinate <= end_coordinate:
+                return panel
+        return None  # or raise an exception if you prefer
+
     def topmembers_at(self, y):
         # for a given location y, there must be members defined ->
-        return
+        spars = self.spar_positions_at(y)
+        panel = self.panels_at(self.toppanels, y)
+
+        topmembers = [Member(panel) for _ in range(len(spars)+1)]
+        return topmembers
 
     def botmembers_at(self, y):
-        return
+        spars = self.spar_positions_at(y)
+        panel = self.panels_at(self.botpanels, y)
+
+        botmembers = [Member(panel) for _ in range(len(spars)+1)]
+        return botmembers
 
     def curvatures_at(self, y):
         """
@@ -160,15 +177,64 @@ class Wing:
         :return:
         """
         moment = self.moment_at(y)
-        spars = self.spar_positions_at(y) # list of spar locations? or of objects? these indicate the locations of the spars for
+        spars = self.spar_positions_at(y)-self.LE_at(y) # list of spar locations? or of objects? these indicate the locations of the spars for
                     # cross sectional analysis
         thickness = self.thickness_at(y)
         chordlength = self.chord_at(y)
         topmembers = self.topmembers_at(y)
         botmembers = self.botmembers_at(y)
         airfoil = Airfoil('e395-il', thickness, chordlength, spars, topmembers, botmembers)
+        airfoil.Neutralpoints()
+        airfoil.CalculateEI()
         kx, ky = airfoil.curvatures(moment, 0)
         return kx, ky
+
+    def calculate_deflection(self, num_points=100):
+        # Sample points along the half span
+        y_points = np.linspace(0, self.halfspan, num=num_points)
+
+        # Calculate curvatures at the sampled points
+        curvatures = np.array([self.curvatures_at(y) for y in y_points])
+        print(len(y_points), len(curvatures))
+
+        # Integrate curvature to get slope
+        slope = self.cumulative_trapezoid(curvatures, y_points, initial=0)
+
+        # Integrate slope to get deflection
+        deflection = self.cumulative_trapezoid(slope, y_points, initial=0)
+
+        return y_points, deflection
+
+    def cumulative_trapezoid(self, y, x, initial=0):
+        """
+        Perform cumulative trapezoidal integration by hand with an initial value.
+
+        Parameters:
+        y (array): The values to integrate.
+        x (array): The x-coordinates corresponding to y.
+        initial (float): The initial value to start the integration from.
+
+        Returns:
+        array: The cumulative integral of y with respect to x.
+        """
+        integral = np.zeros_like(y)
+        integral[0] = initial
+        for i in range(1, len(y)):
+            integral[i] = integral[i - 1] + (y[i] + y[i - 1]) / 2 * (x[i] - x[i - 1])
+        return integral
+
+    def plot_deflection(self, num_points=100):
+        y_points, deflection = self.calculate_deflection(num_points)
+
+        # Plot the deflection
+        plt.figure(figsize=(10, 6))
+        plt.plot(y_points, deflection, label='Deflection')
+        plt.xlabel('Half-span (y)')
+        plt.ylabel('Deflection (v)')
+        plt.title('Deflection of the Wing')
+        plt.legend()
+        plt.grid(True)
+        plt.show()
 
     def spar_positions_at(self, location):
         """
@@ -218,22 +284,11 @@ class Wing:
         plt.axis('equal')
         plt.show()
 
-    def Generatepanels(self):
-        """"
-        Generates panels to analyze
-        :return:
-        """
-        return
-
     def Failureanalysis(self):
         """"
         Does failure analysis of the wing
         :return:
         """
-        return
-
-    def Deflection(self):
-
         return
 
 def generate_chord_and_leading_edge(n, halfspan, coord_at_root):
@@ -244,13 +299,12 @@ def generate_chord_and_leading_edge(n, halfspan, coord_at_root):
 
     return list(chord_lengths), list(leading_edge_locations)
 
-def generate_lift(n, halfspan, coord_at_root):
+def generate_lift(n, halfspan, lift):
     y = np.linspace(0, halfspan, n)
-    chord_lengths = coord_at_root * np.sqrt(1 - (y / halfspan) ** 2)
-    leading_edge_offsets = 0.25 * coord_at_root - 0.25 * chord_lengths
-    leading_edge_locations = leading_edge_offsets + 0
-
-    return list(chord_lengths), list(leading_edge_locations)
+    halflift = lift/2
+    lr = (np.pi/4)*halflift/halfspan
+    lifts = lr * np.sqrt(1 - (y / halfspan) ** 2)
+    return lifts
 
 # Example usage:
 n = 1000  # Number of points
@@ -259,22 +313,23 @@ coord_at_root = 300  # Chord length at the root
 
 chord_lengths, leading_edge_locations = generate_chord_and_leading_edge(n, halfspan, coord_at_root)
 
-
 # Example usage:
-liftdistribution = [5, 4, 3, 2, 5]  # Example lift distribution
+liftdistribution = generate_lift(10, 1500, 981)
 thicknessdistribution = [10, 12, 14, 16, 18]  # Example thickness distribution
 halfspan = 1500  # Half span of the wing
-sparcoordinates = [[[300/4, 0], [15 + 250/4, 1000], [40 + 200/4, 1400]], [[200, 0], [185, 1000], [130, 1400]]]  # Example spar coordinates
+sparcoordinates = [[[300/4, 0], [15 + 250/4, 1000], [75, 1500]], [[200, 0], [185, 1000], [75, 1500]]]  # Example spar coordinates
 ribcoordinates = [0, 600, 1200, 1400]
-airfoilcoords = [[0, 1, 2], [0, -1, -2]]  # Example airfoil coordinates
 
 
 
-wing = Wing(liftdistribution, chord_lengths, leading_edge_locations, thicknessdistribution, halfspan, ribcoordinates, sparcoordinates, airfoilcoords)
+wing = Wing(liftdistribution, chord_lengths, leading_edge_locations, thicknessdistribution, halfspan, ribcoordinates, sparcoordinates)
+
+wing.toppanels = [[PanelWingRoot, 1600]]
+wing.botpanels = [[PanelWingRoot, 1600]]
 moment_distribution = wing.internal_moment()
 shear_distribution = wing.shear_force()
 
-location = 100  # Example location along the half span
+location = 1200  # Example location along the half span
 shear_at_location = wing.shear_at(location)
 moment_at_location = wing.moment_at(location)
 spar_positions = wing.spar_positions_at(location)
@@ -284,6 +339,8 @@ print("Shear Force at location", location, ":", shear_at_location)
 print("Moment at location", location, ":", moment_at_location)
 print("Spar positions at location", location, ":", spar_positions)
 print("Leading Edge at location", location, ":", LE_at_location)
+print('airfoil curvature:', location, ":", wing.curvatures_at(location))
 
 # Plot the wing planform
 wing.plot_wing_planform()
+wing.plot_deflection(100)

@@ -1,7 +1,4 @@
-import numpy as np
-from Toolbox.Lamina import Lamina
-from Toolbox import MP
-from Toolbox.Laminate import Laminate, LaminateBuilder
+from Toolbox.Laminate import LaminateBuilder
 import matplotlib.pyplot as plt
 import scipy.optimize as opt
 import scipy.interpolate as interp
@@ -31,10 +28,13 @@ class Member:
 
         self.startcoord = [] # from leading to trailing edge for wing
         self.endcoord = [] # from leading to trailing edge for wing
+        self.R = None
         if not self.startcoord:
             self.b = b # panel width
         self.a = a  # panel depth
         self.curvealongx = None
+        self.booms = None
+        self.segments = None
 
         # ----------------------------------------------------------------
         # Dacs II: impact
@@ -50,6 +50,20 @@ class Member:
         x2, y2 = self.endcoord
         self.b = np.sqrt((x2-x1)**2 + (y2-y1)**2)
         return self.b
+
+    def Zbcalculation(self):
+        if self.R == None:
+            self.Zb = 0
+        else:
+            self.Zb = np.sqrt(1-self.panel.vxy*self.panel.vyx)*self.b**2/(self.R*self.panel.h)
+        return self.Zb
+
+    def kofZb(self):
+        if self.Zb == 0:
+            ScalingFactor = 1
+        else:
+            pass
+        return ScalingFactor
 
     def ShearBucklingFI(self):
         D11 = self.panel.ABD_matrix[3, 3]

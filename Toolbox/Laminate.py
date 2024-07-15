@@ -1,7 +1,7 @@
 import numpy as np
 from tqdm import tqdm
 from Toolbox.Lamina import Lamina
-from Toolbox import MP
+from Data import MP
 import copy
 
 class Laminate:
@@ -348,7 +348,7 @@ class Laminate:
         ABD_transformed = T_ext @ self.ABD_matrix @ T_ext.T
         return ABD_transformed
 
-def LaminateBuilder(angleslist,symmetry, copycenter, multiplicity):
+def LaminateBuilder(angleslist,symmetry, copycenter, multiplicity, type = None):
     if symmetry == True:
         if copycenter == True:
             angleslist = angleslist + angleslist[-1::-1]
@@ -359,7 +359,11 @@ def LaminateBuilder(angleslist,symmetry, copycenter, multiplicity):
     angleslist = angleslist * multiplicity
 
     # Define standard lamina:
-    lamina = Lamina(MP.t, 45, MP.elasticproperties, MP.failureproperties)
+    if type == None:
+        lamina = Lamina(MP.t, 45, MP.elasticproperties, MP.failureproperties)
+    else:
+        props = MP.CF[type]
+        lamina = Lamina(props['t'], 0, props['elasticproperties'], props['failureproperties'])
     laminas = []
 
     # populate laminas list:

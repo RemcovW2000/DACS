@@ -1,30 +1,41 @@
 import numpy as np
-from tqdm import tqdm
-from Lamina import Lamina
-import MP
-import copy
-from Laminate import Laminate
-from Core import core
+
 
 class Sandwich:
-    def __init__(self, laminate1, laminate2, core, Loads):
+    def __init__(self, laminate1, laminate2, core, Loads, Strains):
         self.laminate1 = laminate1
         self.laminate2 = laminate2
         self.core = core
 
-        self.Loads = [Loads[0], Loads[1], Loads[2], Loads[3], Loads[4], Loads[5]]
+        self.Loads = Loads
+        self.Strains = Strains
+        self.h = self.laminate1.h + self.laminate2.h + self.core.h
 
         # ABD matrix assigned upon initialisation:
         self.CalculateEquivalentABD()
+        self.CalculateEquivalentProperties()
 
     def CalculateEquivalentABD(self):
-        L1ABD = self.laminate1.CalculateCoreABD(self.core.thickness)
-        L2ABD = self.laminate2.CalculateCoreABD(self.core.thickness)
+        L1ABD = self.laminate1.CalculateCoreABD(self.core.h)
+        L2ABD = self.laminate2.CalculateCoreABD(self.core.h)
 
         totalABD = L1ABD + L2ABD
 
         self.ABD_matrix = totalABD
         return totalABD
+
+    def CalculateEquivalentProperties(self):
+        # Here we calculate the engineering constants (or equivalent properties):
+        self.Ex = (self.ABD_matrix[0, 0] * self.ABD_matrix[1, 1] - self.ABD_matrix[0, 1] ** 2) / (
+                    self.h * self.ABD_matrix[1, 1])
+        self.Ey = (self.ABD_matrix[0, 0] * self.ABD_matrix[1, 1] - self.ABD_matrix[0, 1] ** 2) / (
+                    self.h * self.ABD_matrix[0, 0])
+
+        self.vxy = self.ABD_matrix[0, 1] / self.ABD_matrix[1, 1]
+        self.vyx = self.ABD_matrix[0, 1] / self.ABD_matrix[0, 0]
+
+        self.Gxy = self.ABD_matrix[2, 2] / self.h
+        return
 
     def FailureAnalysis(self):
         # Check wrinkling and FPF:
