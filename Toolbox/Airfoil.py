@@ -51,7 +51,31 @@ class Airfoil:
         botcoordinates = [[element * self.chordlength for element in sublist] for sublist in botcoordinates]
         self.topcoordinates = topcoordinates
         self.botcoordinates = botcoordinates
+
         return self.topcoordinates, self.botcoordinates
+
+    def calculate_area(self, top_points, bottom_points):
+        """
+        Calculate the area enclosed by the airfoil section, defined by the top and bottom surfaces.
+
+        :param top_points: List of lists representing the points on the upper surface [(x1, y1), (x2, y2), ...]
+        :param bottom_points: List of lists representing the points on the lower surface [(x1, y1), (x2, y2), ...]
+        :return: The area enclosed by the box-shaped object.
+        """
+
+        # Ensure points are in correct order to form a closed polygon
+        # Top points go from left to right and bottom points from right to left to form the perimeter
+        polygon_points = top_points + bottom_points
+
+        # Calculate area using the shoelace formula
+        n = len(polygon_points)
+        area = 0.0
+        for i in range(n):
+            x1, y1 = polygon_points[i]
+            x2, y2 = polygon_points[(i + 1) % n]
+            area += x1 * y2 - x2 * y1
+
+        return abs(area) / 2.0
 
     def FindMemberLocations(self):
         # assign the width of the members based on the locations of the ribs
@@ -348,7 +372,7 @@ class Airfoil:
             rx, ry = center[0], center[1]
 
             # force vector:
-            F = segment.qs * (p2-p1)/np.linalg.norm(p2-p1)
+            F = (segment.qs * (p2-p1)/np.linalg.norm(p2-p1)) * np.linalg.norm(p2-p1)
             Fx, Fy = F[0], F[1]
             M = rx * Fy -ry * Fx
             moment += M
@@ -356,15 +380,30 @@ class Airfoil:
 
     def ShearCorrection(self):
         moment = 0
+        toppoints = []
         for member in self.topmembers:
             moment += self.ShearMomentSegments(member.segments)
+            toppointsnew = [member.segments[i].p1 for i in range(len(member.segments))]
+            toppoints += toppointsnew
 
+        botpoints = []
         for member in self.botmembers:
             moment += self.ShearMomentSegments(member.segments)
+            botpointsnew = [member.segments[i].p1 for i in range(len(member.segments))]
+            botpoints += botpointsnew
 
+        A_airfoil = self.calculate_area(toppoints, botpoints)
+        qs0 = moment/(2*A_airfoil)
 
-        return moment
+        for member in self.topmembers:
+            for segment in member.segments:
+                segment.qs = segment.qs + qs0
 
+        for member in self.botmembers:
+            for segment in member.segments:
+                segment.qs = segment.qs + qs0
+
+        return qs0
 
     def CalculateShearFlow(self, Sx, Sy, Mx, My):
         # First generate booms for top and bot:
@@ -450,10 +489,10 @@ if __name__ == '__main__':
     Airfoil.plotairfoil()
     print(Airfoil.CalculateEI())
     print(Airfoil.curvatures(30000, 0))
-
     Mx = 30000
     My = 0
     Sx = 0
     Sy = 100
     Airfoil.CalculateShearFlow(Sx, Sy, Mx, My)
+    Airfoil.ShearCorrection()
     Airfoil.PlotShearFlow()

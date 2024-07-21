@@ -359,6 +359,8 @@ def LaminateBuilder(angleslist,symmetry, copycenter, multiplicity, type = None):
     angleslist = angleslist * multiplicity
 
     # Define standard lamina:
+    # We literally have to restructure the lamina class?
+    MatProps =
     if type == None:
         lamina = Lamina(MP.t, 45, MP.elasticproperties, MP.failureproperties)
     else:
