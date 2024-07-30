@@ -12,6 +12,7 @@ class Laminate:
         self.Loads   = Loads
 
         # The laminate also has a failure state, which is a list with the failure state of each lamina:
+        self.ProgressiveDamageAnalysis = False
         self.FailureState = np.zeros(len(self.laminas))
 
         # We calculate the thickness and find layer start and end height:
@@ -159,7 +160,7 @@ class Laminate:
         return stresses
 
     # carry out failure analysis for all lamina in laminate
-    def FailureAnalysis(self):
+    def FailureAnalysis(self, progressivedamageanalysis = False):
         # We need to make sure the lamina have stresses:
         self.StressAnalysis()
 
@@ -179,7 +180,8 @@ class Laminate:
                 failedlamina.append(count)
 
             # set the correct index of the failurestate:
-            self.FailureState[count] = lamina.FailureState
+            if progressivedamageanalysis:
+                self.FailureState[count] = lamina.FailureState
             FailureFactors.append(max(results[1], results[2]))
 
         # We save the maximum failure factor in any of the lamina, to calculate the next loadstep:
@@ -211,7 +213,7 @@ class Laminate:
             self.Loads = Loads
 
             # Run the failure analysis for the laminate with this new load
-            FailureState, failedlamina, maxfailurefactor = self.FailureAnalysis()
+            FailureState, failedlamina, maxfailurefactor = self.FailureAnalysis(True)
 
             # If a lamina has failed, save these loads and strains
             if failedlamina:
@@ -359,8 +361,6 @@ def LaminateBuilder(angleslist,symmetry, copycenter, multiplicity, type = None):
     angleslist = angleslist * multiplicity
 
     # Define standard lamina:
-    # We literally have to restructure the lamina class?
-    MatProps =
     if type == None:
         lamina = Lamina(MP.t, 45, MP.elasticproperties, MP.failureproperties)
     else:

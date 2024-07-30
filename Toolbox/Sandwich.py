@@ -2,9 +2,9 @@ import numpy as np
 
 
 class Sandwich:
-    def __init__(self, laminate1, laminate2, core, Loads, Strains):
-        self.laminate1 = laminate1
-        self.laminate2 = laminate2
+    def __init__(self, laminate1, laminate2, core, Loads = None, Strains = None):
+        self.laminate1 = laminate1 # bottom laminate
+        self.laminate2 = laminate2 # top laminate
         self.core = core
 
         self.Loads = Loads
@@ -38,6 +38,9 @@ class Sandwich:
         return
 
     def FailureAnalysis(self):
+        # First calculate loads:
+        self.FaceSheetLoadDistribution()
+
         # Check wrinkling and FPF:
         FPFFI = self.LaminateFPF()
         print('first ply failure FI:', FPFFI)
@@ -45,15 +48,51 @@ class Sandwich:
         return
 
     def LaminateFPF(self):
-        # TODO: implement correct load distribution between face sheets!
-        laminate_Loads = [0.5 * x for x in self.loads]
-        self.laminate1.Loads = laminate_Loads
-        maxFI = self.laminate1.FailureAnalysis()[2]
+        # loads are assigned
+        maxFI1 = self.laminate1.FailureAnalysis()[2]
+        maxFI2 = self.laminate2.FailureAnalysis()[2]
+        return max(maxFI1, maxFI2)
 
-        self.laminate2.Loads = laminate_Loads
-        maxFI = self.laminate2.FailureAnalysis()[2]
+    def FaceSheetLoadDistribution(self):
+        # Normal loads are as follows:
+        Nx = self.Loads[0]
+        Ny = self.Loads[1]
 
-        return maxFI
+        # Divide normal loads between facesheets based on EA of facesheets
+
+        # Assign Nx:
+        Ext1 = self.laminate1.Ex*self.laminate1.t
+        Ext2 = self.laminate2.Ex*self.laminate2.t
+
+        Nx1 = Nx*(Ext1/(Ext1+Ext2))
+        Nx2 = Nx*(Ext2/(Ext1+Ext2))
+
+        # Assign Ny:
+        Eyt1 = self.laminate1.Ey*self.laminate1.t
+        Eyt2 = self.laminate2.Ey*self.laminate2.t
+
+        Ny1 = Ny*(Eyt1/(Eyt1 + Eyt2))
+        Ny2 = Ny*(Eyt2/(Eyt1 + Eyt2))
+
+        Ns = self.Loads[2]
+
+        # Divide shear loads between facesheets based on shear stifness GA of facesheets
+        Gt1 = self.laminate1.Gxy*self.laminate1.t
+        Gt2 = self.laminate2.Gxy*self.laminate2.t
+
+        Ns1 = Ns*(Gt1/(Gt1 + Gt2))
+        Ns2 = Ns*(Gt2/(Gt1 + Gt2))
+
+        Mx = self.Loads[3]
+        My = self.Loads[4]
+        Ms = self.Loads[5]
+
+        # moments are a bit more complicated but not strictly neccesary now
+        # TODO: add facesheet loads due to moments
+
+        self.laminate1.Loads = [Nx1, Ny1, Ns1, 0, 0, 0]
+        self.laminate2.Loads = [Nx2, Ny2, Ns2, 0, 0, 0]
+        return
 
     def SandwichWrinkingShear(self):
         t_face = self.laminate1.h

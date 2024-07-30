@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d
 from Toolbox.Airfoil import Airfoil
 from Toolbox.Member import Member
-from Data.Panels import PanelWingRoot
+from Data.Panels import Sandwiches
 
 class Wing:
     def __init__(self, liftdistribution, coorddistribution, LElocations, thicknessdistribution, halfspan, ribcoordinates, sparcoordinates):
@@ -324,8 +324,8 @@ ribcoordinates = [0, 600, 1200, 1400]
 
 wing = Wing(liftdistribution, chord_lengths, leading_edge_locations, thicknessdistribution, halfspan, ribcoordinates, sparcoordinates)
 
-wing.toppanels = [[PanelWingRoot, 1600]]
-wing.botpanels = [[PanelWingRoot, 1600]]
+wing.toppanels = [[Sandwiches['PanelWingRoot'], 500], [Sandwiches['PanelWingRoot'], 1600]]
+wing.botpanels = [[Sandwiches['PanelWingRoot'], 500], [Sandwiches['PanelWingRoot'], 1600]]
 moment_distribution = wing.internal_moment()
 shear_distribution = wing.shear_force()
 

@@ -39,7 +39,9 @@ CF = {
         "R11c": 1800,  # From assignment
         "yt": 70,  # From assignment
         "yc": 300,  # From assignment
-        "S": 100  # From assignment
+        "S": 100,  # From assignment
+        "elasticproperties" : [142000, 11200, 5000, 0.3],
+        "failureproperties" : [230000, 0.2, 1.1, 2200, 1800, 70, 300, 100]
     },
     'ezcomposites_spreadtow' : {
         't': 0.12,  # easycomposites website

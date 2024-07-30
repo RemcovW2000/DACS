@@ -35,6 +35,7 @@ class Member:
         self.curvealongx = None
         self.booms = None
         self.segments = None
+        self.arclength = None
 
         # ----------------------------------------------------------------
         # Dacs II: impact
