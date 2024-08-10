@@ -160,7 +160,25 @@ class Laminate:
         return stresses
 
     # carry out failure analysis for all lamina in laminate
-    def FailureAnalysis(self, progressivedamageanalysis = False):
+    def FailureAnalysis(self):
+        # We need to make sure the lamina have stresses:
+        self.StressAnalysis()
+
+        # Initializing an array to save the failure factors:
+        FailureIndicators = []
+
+        # We want to potentially save the lamina which failed, not useful in this assignment though.
+        for count, lamina in enumerate(self.laminas):
+            # Now run for the lamina, the failure analysis
+            results = lamina.FailureAnalysis(lamina.Sigma)
+            # set the correct index of the failurestate:
+            FailureIndicators.append(max(results[1], results[2]))
+
+        # We save the maximum failure factor in any of the lamina, to calculate the next loadstep:
+        maxfailurefactor = max(FailureIndicators)
+        return maxfailurefactor
+
+    def PDA_FailureAnalysis(self):
         # We need to make sure the lamina have stresses:
         self.StressAnalysis()
 
@@ -180,16 +198,16 @@ class Laminate:
                 failedlamina.append(count)
 
             # set the correct index of the failurestate:
-            if progressivedamageanalysis:
-                self.FailureState[count] = lamina.FailureState
+            self.FailureState[count] = lamina.FailureState
             FailureFactors.append(max(results[1], results[2]))
 
         # We save the maximum failure factor in any of the lamina, to calculate the next loadstep:
         maxfailurefactor = np.max(FailureFactors)
         return self.FailureState, failedlamina, maxfailurefactor
 
+
     def Ncrit(self):
-        maxfailurefactor = self.FailureAnalysis()[2]
+        maxfailurefactor = self.FailureAnalysis()
         Ncrit = self.Loads / maxfailurefactor
         return Ncrit
 
@@ -213,7 +231,7 @@ class Laminate:
             self.Loads = Loads
 
             # Run the failure analysis for the laminate with this new load
-            FailureState, failedlamina, maxfailurefactor = self.FailureAnalysis(True)
+            FailureState, failedlamina, maxfailurefactor = self.PDA_FailureAnalysis()
 
             # If a lamina has failed, save these loads and strains
             if failedlamina:

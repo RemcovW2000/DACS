@@ -4,6 +4,7 @@ import scipy.optimize as opt
 import scipy.interpolate as interp
 from Toolbox.DamagedRegion import *
 from tqdm import tqdm
+from Toolbox.curvedplate_data import k_function
 
 class Member:
     def __init__(self, panel, Loads = [0, 0, 0, 0, 0, 0], a = 300, b = 200):
@@ -15,7 +16,6 @@ class Member:
         in direction of x-axis
         3. thickness -> h
         determined by layup
-        TODO: (3. curvature not implemented!)
 
         Damage analysis:
         1. run self.Fimpact() -> calculates force at impact
@@ -38,6 +38,12 @@ class Member:
         self.arclength = None
 
         # ----------------------------------------------------------------
+        # Assign failure indicators as None:
+        self.BucklingFI = 0
+
+        # ----------------------------------------------------------------
+
+        # ----------------------------------------------------------------
         # Dacs II: impact
         self.R_impactor = 6.35
         self.E_impactor = 200000  # MPa
@@ -45,6 +51,123 @@ class Member:
 
         self.BVID_energy = 0.113*2000/25.4 # Joules per inch -> mm thickness
         # ----------------------------------------------------------------
+
+    def CSA_FailureAnalysis(self):
+        ''' Point of this function is to assign the loads of the member from the cross sectional analysis -> get loads
+        from segments and booms!
+
+        most conservative is to take the max shear stress and max normal stress in each member as stress state for buckling
+        as well as FPF
+
+        more accurate is to check FPF at every segment/boom stress combination'''
+        print('-------------------------------------------------------------------------------------')
+        print('Member CSA failure analysis:')
+
+        normalstresses = [boom.Sigmax for boom in self.booms]
+        normalforceintensities = [(stress * self.panel.h) for stress in normalstresses]
+
+        # we must find the most critical stress state, which could in fact be multiple! positive or negative.
+        maxnormalstress = max(normalforceintensities)
+        minnormalstress = min(normalforceintensities)
+
+        shearflows = [segment.qs for segment in self.segments] # N/mm
+
+        # again for shear:
+        maxshearstress = max(shearflows)
+        minshearstress = min(shearflows)
+
+        # make several load cases: combining min with max etc:
+        lc1 = [maxnormalstress, 0, maxshearstress, 0, 0 ,0]
+        lc2 = [minnormalstress, 0, minshearstress, 0, 0 ,0]
+        lc3 = [maxnormalstress, 0, minshearstress, 0, 0 ,0]
+        lc4 = [minnormalstress, 0, maxshearstress, 0, 0 ,0]
+        loadcases = [lc1, lc2, lc3, lc4]
+
+        # we have to check all loadcases for FPF:
+        failureindicators_FPF = []
+        for loadcase in loadcases:
+            self.panel.Loads = loadcase
+            failureindicators_FPF.append(self.panel.FailureAnalysis())
+        print('')
+        print('failure indicators first ply failure for all loadcases:')
+        print(failureindicators_FPF)
+        print('')
+
+        # now we check buckling: take largest abslute value for the shear load and combine it with the
+        # max negative value for the normal load:
+        maxabsindex_shear = max(enumerate(shearflows), key=lambda x: abs(x[1]))[0]
+
+        maxnormal = min(normalforceintensities)
+        maxabs_shear = shearflows[maxabsindex_shear]
+
+        self.Loads = [maxnormal, 0, maxabs_shear, 0, 0 ,0]
+
+        # Curvature must have been assigned in airfoil class!
+        BucklingFI = self.BucklingAnalysis()
+        self.BucklingFI = BucklingFI
+        print('loads assigned for buckling: ', self.Loads)
+        print('Buckling FI:', BucklingFI)
+        print('-------------------------------------------------------------------------------------')
+        return
+
+    def BucklingAnalysis(self):
+        '''
+        Base function to perform the buckling analysis for the member. Loads must already be assigned!
+
+        It should work even if curvature is zero, or certain parameters are not assigned such as R (radius)
+
+        :return:
+        '''
+        # find the right scaling factor:
+        if self.R == None:
+            print('R not assigned!')
+            # R not assigned -> use flat plate eq:
+            scalingfactor = 1
+        elif self.b**2/self.R < 1:
+            # too flat for curved equations: use flat plate eq:
+            scalingfactor = 1
+        elif self.b**2/self.R > 100:
+            # use equations for full cylinder!
+            print('full cylinder equations needed, not programmed! Outcome is false, (and is assigned: Ncrit = 0)')
+            scalingfactor = 1
+            pass
+        else:
+            # use curved plate equation:
+            Zb = np.sqrt(1-self.panel.vxy*self.panel.vyx)*self.b**2/self.R
+            Rovert = self.R/self.panel.h
+            scalingfactor = k_function(Zb, Rovert)
+
+        # ------------------------------------------------------------------------------------
+        # find the failure indicator:
+        if self.Loads[0] > 0:
+            FI = 0
+        else:
+            Ncritnormal = self.CombinedBucklingNcrit(self.Loads)
+            Ncrit = scalingfactor * Ncritnormal
+            FI = self.Loads[0]/Ncrit
+        return abs(FI)
+
+
+
+    def CombinedBucklingNcrit(self, Loads):
+        D11 = self.panel.ABD_matrix[3, 3]
+        D12 = self.panel.ABD_matrix[3, 4]
+        D22 = self.panel.ABD_matrix[4, 4]
+        D66 = self.panel.ABD_matrix[5, 5]
+
+        # we check the formula for many m (# of half waves in this buckling mode)
+        Ncritnorm = (np.pi / self.a) ** 2 * (
+                    D11 + 2 * (D12 + 2 * D66) * (self.a / self.b) ** 2 + D22 * (
+                        self.a / self.b) ** 4)
+
+        Nx = Loads[0]
+        Nxy = Loads[2]
+        k = Nxy/Nx
+        denominator = 2 - (8192 * self.a**2 * k**2)/(81 * self.b**2 * np.pi**4)
+
+        term2 = 5 - np.sqrt(9 + (65536*self.a**2*k**2)/(81*np.pi**4*self.b**2))
+        Ncrit = abs((Ncritnorm/denominator)*term2)
+        return Ncrit
 
     def Calculate_b(self):
         x1, y1 = self.startcoord
@@ -59,12 +182,15 @@ class Member:
             self.Zb = np.sqrt(1-self.panel.vxy*self.panel.vyx)*self.b**2/(self.R*self.panel.h)
         return self.Zb
 
-    def kofZb(self):
-        if self.Zb == 0:
-            ScalingFactor = 1
-        else:
-            pass
-        return ScalingFactor
+    def kofZb(self, Zb, rovert):
+        '''
+        this function should only be used if CURVED PLATE conditions are true
+
+        Uses interpolation of curves!
+        :return:
+        '''
+        
+        return 1
 
     def ShearBucklingFI(self):
         D11 = self.panel.ABD_matrix[3, 3]
@@ -126,7 +252,6 @@ class Member:
         Fcrit_min = min(Fcrits)
         min_index = Fcrits.index(Fcrit_min)
         min_mode = min_index+1
-        print(min_mode)
         return Fcrit_min
 
     def deflection_single_term(self, F, m, n, xo, yo, x, y):

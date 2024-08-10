@@ -1,12 +1,15 @@
 import copy
 
+import numpy as np
+
 from Data.Airfoils import airfoilcoords
 from scipy.interpolate import interp1d
 from Toolbox.Laminate import LaminateBuilder
 import matplotlib.pyplot as plt
 from Toolbox.DamagedRegion import *
 from Toolbox.Member import Member
-
+from scipy.integrate import simps
+from matplotlib.colors import Normalize, TwoSlopeNorm
 
 class Airfoil:
     def __init__(self, airfoilname, thickness, chordlength, sparlocations, topmembers, botmembers, sparmembers):
@@ -42,6 +45,12 @@ class Airfoil:
         self.sparmembers = sparmembers
 
         self.FindMemberLocations()
+
+        self.segmentlength = 1 #length of segments in mm
+        self.Sx = 0
+        self.Sy = 0
+        self.N0 = 0
+        self.E0 = 0
 
     def top_bot_coordinates(self):
         # transform the coordinates as neccesary:
@@ -137,27 +146,40 @@ class Airfoil:
         x1, y1 = P1
         x2, y2 = P2
 
-        b = (y1 - (x1 * y2 / x2)) / (1 - x1 / x2)
-        a = (y2 - b) / x2
-        Ixx = abs(t * np.sqrt(1 + a ** 2) * (
-                    a ** 2 * (x2 ** 3 - x1 ** 3) / 3 + a * b * (x2 ** 2 - x1 ** 2) + b ** 2 * (x2 - x1)))
-
-        # Ixy in a similar way:
-        Ixy = t*np.sqrt(1+a**2) * ((x2**3 - x1**3)*a/3 + (x2**2-x1**2)*b/2)
-
-        # We can simply switch x and y, and obtain Iyy using the same equations:
-        y1, x1 = P1
-        y2, x2 = P2
-
-        if x1 == x2 or x2 == 0:
-            x2 +=1e-10
-            b = (y1 - (x1 * y2 / x2)) / (1 - x1 / x2)
-            a = (y2 - b) / x2
+        x = x1 + (x2-x1)/2
+        y = y1 + (y2-y1)/2
+        A = np.sqrt((x2-x1)**2 + (y2-y1)**2) * t
+        if x1 == x2:
+            h = abs(y2 - y1)
+            Ixx = abs(0.125*t*h**3 + A * y **2)
+            Iyy = abs(0.125*h*t**3 + A * x **2)
+            Ixy = abs(A * x * y)
+        elif y1 == y2:
+            h = t
+            b = abs(x2 - x1)
+            Ixx = abs(0.125 * b * h ** 3 + A * y ** 2)
+            Iyy = abs(0.125 * h * b ** 3 + A * x ** 2)
+            Ixy = abs(A * x * y)
         else:
             b = (y1 - (x1 * y2 / x2)) / (1 - x1 / x2)
             a = (y2 - b) / x2
-        Iyy = abs(t * np.sqrt(1 + a ** 2) * (
-                    a ** 2 * (x2 ** 3 - x1 ** 3) / 3 + a * b * (x2 ** 2 - x1 ** 2) + b ** 2 * (x2 - x1)))
+            Ixx = abs(t * np.sqrt(1 + a ** 2) * (
+                        a ** 2 * (x2 ** 3 - x1 ** 3) / 3 + a * b * (x2 ** 2 - x1 ** 2) + b ** 2 * (x2 - x1)))
+
+            # Ixy in a similar way:
+            Ixy = t*np.sqrt(1+a**2) * ((x2**3 - x1**3)*a/3 + (x2**2-x1**2)*b/2)
+
+            # We can simply switch x and y, and obtain Iyy using the same equations:
+            y1, x1 = P1
+            y2, x2 = P2
+
+            if x2 == 0:
+                x2 +=1e-15
+
+            b = (y1 - (x1 * y2 / x2)) / (1 - x1 / x2)
+            a = (y2 - b) / x2
+            Iyy = abs(t * np.sqrt(1 + a ** 2) * (
+                        a ** 2 * (x2 ** 3 - x1 ** 3) / 3 + a * b * (x2 ** 2 - x1 ** 2) + b ** 2 * (x2 - x1)))
 
         return Ixx, Iyy, Ixy
 
@@ -276,17 +298,18 @@ class Airfoil:
         # for bot and top members we have a function:
         EIxxt, EIyyt, EIxyt = self.EI(self.topmembers, 100, 'top')
         EIxxb, EIyyb, EIxyb = self.EI(self.botmembers, 100, 'bot')
-
         # for the spars we do the following:
         EIxxs = 0
         EIyys = 0
         EIxys = 0
         for member in self.sparmembers:
-            EIxx, EIyy, EIxy = self.segment_I(member.h, member.startcoord, member.endcoord)
+            Ixx, Iyy, Ixy = self.segment_I(member.h, member.startcoord, member.endcoord)
+            EIxx = Ixx * member.panel.Ex
+            EIyy = Iyy * member.panel.Ex
+            EIxy = Ixy * member.panel.Ex
             EIxxs += EIxx
             EIyys += EIyy
             EIxy += EIxy
-
         # Now add them all up to obtain the total:
         self.EIxx = EIxxt + EIxxb + EIxxs
         self.EIyy = EIyyt + EIyyb + EIyys
@@ -304,7 +327,7 @@ class Airfoil:
                 else:
                     # find the points with neutral axes:
                     p1 = [x - self.xbar, self.Top_height_at_neutralax(x) if side == 'top' else self.Bottom_height_at_neutralax(x)]
-                    p2 = [xlist[i + 1]- self.xbar, self.Top_height_at_neutralax(xlist[i + 1]) if side == 'top' else self.Bottom_height_at_neutralax(xlist[i + 1])]
+                    p2 = [xlist[i + 1] - self.xbar, self.Top_height_at_neutralax(xlist[i + 1]) if side == 'top' else self.Bottom_height_at_neutralax(xlist[i + 1])]
 
                 Ilist = self.segment_I(member.panel.h, p1, p2)
                 EIxx += Ilist[0]*member.panel.Ex
@@ -321,10 +344,14 @@ class Airfoil:
         return kx, ky
 
     def AxialStrain(self, kx, ky, x, y):
-        e = -kx*(y-self.ybar) + ky*(x-self.xbar)
+        '''
+        Calculates strain
+        coordinates around the CENTROID/NEUTRAL POINT!!!
+        '''
+        e = -kx*(y) + ky*(x)
         return e
 
-    def GenerateBooms(self, memberlist, side, Mx, My, npoints):
+    def GenerateBooms(self, memberlist, side, Mx, My):
         '''
         Generate a bunch of skin segments with a thickness, start and end point, as well as sigma1, sigma2 and thickness
         '''
@@ -347,6 +374,9 @@ class Airfoil:
             return B1, B2, s1, s2
 
         for member in memberlist if side == 'top' else reversed(memberlist):
+            start = np.array(member.startcoord)
+            end = np.array(member.endcoord)
+            npoints = round(abs(np.linalg.norm(end-start)/self.segmentlength))
             # in the topmembers list, we know the start and end coordinates:
             xlist = np.linspace(member.startcoord[0] if side == 'top' else member.endcoord[0], member.endcoord[0] if side == 'top' else member.startcoord[0], npoints)
             boomplaceholder = boom()
@@ -392,7 +422,9 @@ class Airfoil:
             return B1, B2, s1, s2
 
         for i, member in enumerate(self.sparmembers):
-            npoints = 20
+            start = np.array(member.startcoord)
+            end = np.array(member.endcoord)
+            npoints = round(abs(np.linalg.norm(end - start) / self.segmentlength))
             ylocations = np.linspace(member.startcoord[1], member.endcoord[1], npoints)
             x = member.startcoord[0]
 
@@ -404,8 +436,8 @@ class Airfoil:
                     break
                 # then proceed:
                 # Find the coordinates of the stard and end of a segment:
-                p1 = [x, ylocations[i]]
-                p2 = [x, ylocations[i + 1]]
+                p1 = [x - self.xbar, ylocations[i] - self.ybar]
+                p2 = [x - self.xbar, ylocations[i + 1] - self.ybar]
 
                 # Then find the boom areas and normal stresses:
                 B1, B2, s1, s2 = CalculateBoomAreas(p1, p2, member)
@@ -421,28 +453,6 @@ class Airfoil:
             # Finally, assign the booms to the member:
             member.booms = boomlist
         return
-
-    def ShearFlow(self, memberlist, Sx, Sy, Brxr, Bryr, side):
-        for member in memberlist if side == 'top' else reversed(memberlist):
-            segmentexample = segment()
-            segmentlist = [copy.deepcopy(segmentexample) for _ in range(len(member.booms) - 1)]
-
-            Ixx = self.EIxx/member.panel.Ex
-            Iyy = self.EIyy/member.panel.Ex
-            Ixy = self.EIxy/member.panel.Ex
-            Term1 = -(Sx*Ixx - Sy*Ixy)/(Ixx*Iyy - Ixy**2)
-            Term2 = -(Sy*Iyy - Sx*Ixy)/(Ixx*Iyy - Ixy**2)
-            for i, boom in enumerate(member.booms):
-                if i == len(member.booms)-1:
-                    break
-                else:
-                    Brxr += boom.B*boom.location[0]
-                    Bryr += boom.B*boom.location[1]
-                    segmentlist[i].qs = Term1*Brxr + Term2*Bryr
-                    segmentlist[i].p1, segmentlist[i].p2 = boom.location, member.booms[i+1].location
-
-            member.segments = segmentlist
-        return Brxr, Bryr
 
     def Calculate_SectionShearFlow(self, memberlist, Sx, Sy):
         """ for one closed section, shear flow is calculated, and assigned to the members"""
@@ -465,111 +475,192 @@ class Airfoil:
                     Bryr += boom.B*boom.location[1]
                     segmentlist[i].qs = Term1*Brxr + Term2*Bryr
                     segmentlist[i].p1, segmentlist[i].p2 = boom.location, member.booms[i+1].location
-
             member.segments = segmentlist
         return Brxr, Bryr
 
     def SectionShearFlows(self, Sx, Sy):
+        self.GenerateBooms(self.topmembers, 'top', Mx, My)
+        self.GenerateBooms(self.botmembers, 'bot', Mx, My)
+        self.GenerateSparBooms()
         # initialize section list:
         self.sectionlist = []
         # There are as many sections as there are members in the top or bottom skin:
         for i, member in enumerate(self.topmembers):
             # exceptions for first and last sections:
+            topmember = copy.deepcopy(self.topmembers[i])
+            botmember = copy.deepcopy(self.botmembers[i])
             if i == 0:
-                memberlist = [copy.deepcopy(self.topmembers[i]), copy.deepcopy(self.sparmembers[i]),
-                              copy.deepcopy(self.botmembers[i])]
+                memberlist = [topmember, copy.deepcopy(self.sparmembers[i]), botmember]
+
             elif i == len(self.topmembers)-1:
-                memberlist = [copy.deepcopy(self.topmembers[i]), copy.deepcopy(self.botmembers[i]),
+                memberlist = [topmember, botmember,
                               copy.deepcopy(self.sparmembers[i-1])]
+
             # now the 'main loop'
             else:
                 # NOTE: We make copies of all the members!
-                memberlist = [copy.deepcopy(self.topmembers[i]), copy.deepcopy(self.sparmembers[i]),
-                              copy.deepcopy(self.botmembers[i]), copy.deepcopy(self.sparmembers[i-1])]
+                memberlist = [topmember, copy.deepcopy(self.sparmembers[i]),
+                              botmember, copy.deepcopy(self.sparmembers[i-1])]
 
+            # now calculate the shear flow:
             # We then pass this member list and calculate the shear flow for the open cross section:
             self.Calculate_SectionShearFlow(memberlist, Sx, Sy)
+            toppoints = [topmember.segments[i].p1 for i in range(len(topmember.segments))]
+            botpoints = [botmember.segments[i].p1 for i in range(len(botmember.segments))]
+            A = self.calculate_area(toppoints, botpoints)
+            # determine if the current section is at a leading or trailing edge:
+            leadingedge = False
+            trailingedge = False
+            if i == 0:
+                leadingedge = True
+            elif i == len(self.topmembers)-1:
+                trailingedge = True
 
             # store in a section object for ease of access:
-            currentsection = section(memberlist, Sx, Sy)
+            currentsection = section(memberlist, Sx, Sy, leadingedge, trailingedge, A)
             self.sectionlist.append(currentsection)
+
+
         return
 
     def SectionShearCorrection(self):
         # set up system of equations!
-        return
+        array = np.zeros((len(self.sectionlist) + 1, len(self.sectionlist) + 1))
+        for i, section in enumerate(self.sectionlist):
+            if i == 0:
+                array[i, i] = section.prefactor * section.deltawhole
+                array[i, i + 1] = -section.prefactor * section.deltaback
+            elif i == len(self.sectionlist)-1:
+                array[i, i] = section.prefactor * section.deltawhole
+                array[i, i-1] = -section.prefactor * section.deltafront
+            else:
+                array[i, i] = section.prefactor * section.deltawhole
+                array[i, i + 1] = -section.prefactor * section.deltaback
+                array[i, i - 1] = -section.prefactor * section.deltafront
 
-    def ShearCorrection(self):
-        moment = 0
-        toppoints = []
-        for member in self.topmembers:
-            moment += self.ShearMomentSegments(member.segments)
-            toppointsnew = [member.segments[i].p1 for i in range(len(member.segments))]
-            toppoints += toppointsnew
+            array[i, len(self.sectionlist)] = -1
 
-        botpoints = []
-        for member in self.botmembers:
-            moment += self.ShearMomentSegments(member.segments)
-            botpointsnew = [member.segments[i].p1 for i in range(len(member.segments))]
-            botpoints += botpointsnew
+        # add last equation:
+        array[-1, : -1] = [2*section.A for section in self.sectionlist]
+        # define vector:
+        vector = np.zeros(len(self.sectionlist) + 1)
+        for i, section in enumerate(self.sectionlist):
+            vector[i] = -section.int_qb_ds_over_t * section.prefactor
+        vector[-1] = sum([section.ShearMoment for section in self.sectionlist])
 
-        A_airfoil = self.calculate_area(toppoints, botpoints)
-        qs0 = moment/(2*A_airfoil)
+        vector[-1] += self.Sx*self.N0 - self.Sy * self.E0
+        print('--------------------------------------------------------------------------')
+        print('array:')
+        print(array)
+        print('vector:')
+        print(vector)
+        print('--------------------------------------------------------------------------')
+        # we now solve the system
+        x = np.linalg.solve(array, vector)
+        print('solution vector:', x)
+        # the shear flow corrections are as follows:
+        correctionfactors = x[0:-1]
+        print('correction factors: ', correctionfactors)
+        for i, Section in enumerate(self.sectionlist):
+            Section.qs0 = correctionfactors[i]
+            Section.ShearCorrection()
 
-        for member in self.topmembers:
-            for segment in member.segments:
-                segment.qs = segment.qs + qs0
+        for Section in self.sectionlist:
+            Section.PlotShearFlow()
+        return x
 
-        for member in self.botmembers:
-            for segment in member.segments:
-                segment.qs = segment.qs + qs0
+    def ShearSuperPosition(self):
+        ''' this function superimposes the shear stresses found in the sections seperately, now in the original members'''
 
-        return qs0
+        for i, section in enumerate(self.sectionlist):
+            if section.leadingedge:
+                topindex = 0
+                botindex = 2
 
-    def CalculateShearFlow(self, Sx, Sy, Mx, My):
-        # First generate booms for top and bot:
-        self.GenerateBooms(self.topmembers, 'top', Mx, My, 100)
-        self.GenerateBooms(self.botmembers, 'bot', Mx, My, 100)
-        # Then we
-        Brxr_top, Bryr_top = self.ShearFlow(self.topmembers, Sx, Sy, 0, 0, 'top')
-        self.ShearFlow(self.botmembers, Sx, Sy, Brxr_top, Bryr_top, 'bot')
-        # now we've calculated all shear flows
+                # now shear stress in the rib members: superimposed
+                sparmemberindexes = [i]
+                memberindexforspar = [1]
+
+            elif section.trailingedge:
+                topindex = 0
+                botindex = 1
+
+                sparmemberindexes = [i-1]
+                memberindexforspar = [2]
+
+            else:
+                topindex = 0
+                botindex = 2
+
+                sparmemberindexes = [i, i - 1]
+                memberindexforspar = [1, 3]
+            self.topmembers[i] = section.members[topindex]
+            self.botmembers[i] = section.members[botindex]
+
+            # for the spars, the member class instance does not have segments yet, if it's the first time accessing the
+            # spar member, we must copy it.
+
+            # now shear stress in the spar members: superimposed
+            for n, index in enumerate(sparmemberindexes):
+                # if the spar member does not have segments, it means it has not been replaced by an
+                # object from the analysis for the section, thus it can be replaced:
+                if not self.sparmembers[index].segments:
+                    self.sparmembers[index] = section.members[memberindexforspar[n]]
+                else:
+                    for k, segment in enumerate(self.sparmembers[index].segments):
+                        # we must subtract the result as the qs in the next cell is always opposite!
+                        segment.qs += -section.members[memberindexforspar[n]].segments[k].qs
         return
 
     def PlotShearFlow(self):
         allsegments = []
         for member in self.topmembers:
-            newsegments = [(segment.p1, segment.p2, abs(segment.qs)) for segment in member.segments]
+            newsegments = [(segment.p1, segment.p2, segment.qs) for segment in member.segments]
             allsegments.extend(newsegments)  # Use extend instead of append to flatten the list
 
         for member in self.botmembers:
-            newsegments = [(segment.p1, segment.p2, abs(segment.qs)) for segment in member.segments]
+            newsegments = [(segment.p1, segment.p2, segment.qs) for segment in member.segments]
             allsegments.extend(newsegments)  # Use extend instead of append to flatten the list
+
+        for member in self.sparmembers:
+            newsegments = [(segment.p1, segment.p2, segment.qs) for segment in member.segments]
+            allsegments.extend(newsegments)
 
         # Extract values to normalize
         values = [value for _, _, value in allsegments]
+        min_value = min(values)
         max_value = max(values)
+        max_abs_value = max(abs(min_value), abs(max_value))
 
-        # Normalize values
-        normalized_values = [value / max_value for value in values]
-
-        # Create a color map
-        cmap = plt.get_cmap('viridis')
+        # Determine the appropriate colormap and normalization
+        if max_value <= 0:
+            # All values are negative or zero, use absolute values for intensity
+            cmap = plt.get_cmap('Blues')
+            norm = Normalize(vmin=0, vmax=abs(min_value))
+            normalized_values = [abs(value) for value in values]
+        elif min_value >= 0:
+            # All values are positive or zero
+            cmap = plt.get_cmap('Reds')
+            norm = Normalize(vmin=0, vmax=max_value)
+            normalized_values = values
+        else:
+            # Values are both positive and negative, use symmetric normalization
+            cmap = plt.get_cmap('coolwarm')
+            norm = TwoSlopeNorm(vmin=-max_abs_value, vcenter=0, vmax=max_abs_value)
+            normalized_values = values
 
         # Plot the lines
         fig, ax = plt.subplots()
-        for (p1, p2), normalized_value in zip(
-                [(p1, p2) for p1, p2, value in allsegments],
-                normalized_values):
+        for (p1, p2), value in zip([(p1, p2) for p1, p2, value in allsegments], normalized_values):
             x1, y1 = p1
             x2, y2 = p2
-            ax.plot([x1, x2], [y1, y2], color=cmap(normalized_value), linewidth=2)
+            ax.plot([x1, x2], [y1, y2], color=cmap(norm(value)), linewidth=2)
 
         # Set equal scaling
         ax.set_aspect('equal', adjustable='box')
 
         # Add a color bar
-        sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=0, vmax=max_value))
+        sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
         sm.set_array([])
         fig.colorbar(sm, ax=ax, label='Value')
 
@@ -579,6 +670,197 @@ class Airfoil:
         plt.show()
         return
 
+    def PlotNormalStrain(self):
+        '''
+        we have to use the points given by points list for both top and bottom
+        :return:
+        '''
+        topcoordinates = [[self.topcoordinates[i][0] - self.xbar, self.topcoordinates[i][1] - self.ybar] for i in range(len(self.topcoordinates))]
+        botcoordinates = [[self.botcoordinates[i][0] - self.xbar, self.botcoordinates[i][1] - self.ybar] for i in range(len(self.botcoordinates))]
+        coordinates = topcoordinates + botcoordinates
+
+        x_coords = [point[0] for point in coordinates]
+        y_coords = [point[1] for point in coordinates]
+        kx, ky = self.curvatures(Mx, My)
+
+        # having 2 points, we obtain 2 strains and stresses
+
+        strains = [self.AxialStrain(kx, ky, point[0], point[1])*1e6 for point in coordinates]
+
+        plt.figure(figsize=(8, 6))
+        sc = plt.scatter(x_coords, y_coords, c=strains, cmap='viridis', s=20)
+
+        # Add a color bar to indicate the value range
+        plt.colorbar(sc, label='microstrain')
+
+        # Normalize the axes
+        plt.axis('equal')
+
+        # Add labels and title
+        plt.xlabel('X Coordinate from neutral point')
+        plt.ylabel('Y Coordinate from neutral point')
+        plt.title('Normal strain')
+
+        # Show plot
+        plt.show()
+        return
+
+    def PlotNormalForceIntensity(self):
+        allsegments = []
+        for member in self.topmembers:
+            newsegments = [(segment.p1, segment.p2, member.booms[i].Sigmax*member.panel.h) for i, segment in enumerate(member.segments)]
+            allsegments.extend(newsegments)  # Use extend instead of append to flatten the list
+
+        for member in self.botmembers:
+            newsegments = [(segment.p1, segment.p2, member.booms[i].Sigmax*member.panel.h) for i, segment in enumerate(member.segments)]
+            allsegments.extend(newsegments)  # Use extend instead of append to flatten the list
+
+        for member in self.sparmembers:
+            newsegments = [(segment.p1, segment.p2, member.booms[i].Sigmax*member.panel.h) for i, segment in enumerate(member.segments)]
+            allsegments.extend(newsegments)
+
+        # Extract values to normalize
+        values = [value for _, _, value in allsegments]
+        min_value = min(values)
+        max_value = max(values)
+        max_abs_value = max(abs(min_value), abs(max_value))
+
+        # Determine the appropriate colormap and normalization
+        if max_value <= 0:
+            # All values are negative or zero, use absolute values for intensity
+            cmap = plt.get_cmap('Blues')
+            norm = Normalize(vmin=0, vmax=abs(min_value))
+            normalized_values = [abs(value) for value in values]
+        elif min_value >= 0:
+            # All values are positive or zero
+            cmap = plt.get_cmap('Reds')
+            norm = Normalize(vmin=0, vmax=max_value)
+            normalized_values = values
+        else:
+            # Values are both positive and negative, use symmetric normalization
+            cmap = plt.get_cmap('coolwarm')
+            norm = TwoSlopeNorm(vmin=-max_abs_value, vcenter=0, vmax=max_abs_value)
+            normalized_values = values
+
+        # Plot the lines
+        fig, ax = plt.subplots()
+        for (p1, p2), value in zip([(p1, p2) for p1, p2, value in allsegments], normalized_values):
+            x1, y1 = p1
+            x2, y2 = p2
+            ax.plot([x1, x2], [y1, y2], color=cmap(norm(value)), linewidth=2)
+
+        # Set equal scaling
+        ax.set_aspect('equal', adjustable='box')
+
+        # Add a color bar
+        sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+        sm.set_array([])
+        fig.colorbar(sm, ax=ax, label='Nx')
+
+        ax.set_xlabel('X-axis')
+        ax.set_ylabel('Y-axis')
+        ax.set_title('Normal force intensity (N/mm)')
+        plt.show()
+        return
+    def membercurvature(self, member, side):
+        '''
+        Assigns curvature to members. the reason we dont do this in the member is because the booms are located on linearly
+        interpolated thus some form straight lines -> as a result, it would display curvature of 0.
+        '''
+        # find member start and end x coord:
+        # Filter points based on the given x bounds
+        lower_bound = member.startcoord[0]
+        upper_bound = member.endcoord[0]
+
+        # now filter the points in the correct list based on the lower and upper bound:
+        if side == 'top':
+            points = self.topcoordinates
+        elif side == 'bot':
+            points = self.botcoordinates
+        else:
+            print('side not assigned, must be assigned either "top" or "bot"')
+        filtered_points = [point for point in points if lower_bound <= point[0] <= upper_bound]
+
+        # now find the radius:
+        radius_max = 0
+
+        for i in range (len(filtered_points)-2):
+            p1 = filtered_points[i]
+            p2 = filtered_points[i+1]
+            p3 = filtered_points[i+2]
+            radius = self.circle_radius_from_three_points(p1, p2, p3)
+            if radius > radius_max:
+                radius_max = radius
+        member.R = radius_max
+        return
+
+    def AssignMemberCurvature(self):
+        '''
+        assigns curvature to all members in top and bottom:
+        :return:
+        '''
+        for member in self.topmembers:
+            self.membercurvature(member, side='top')
+
+        for member in self.botmembers:
+            self.membercurvature(member, side = 'bot')
+
+        return
+
+    def circle_radius_from_three_points(self, p1, p2, p3):
+        # Extract coordinates
+        x1, y1 = p1
+        x2, y2 = p2
+        x3, y3 = p3
+
+        # Calculate the determinants
+        D = np.linalg.det([[x1, y1, 1],
+                           [x2, y2, 1],
+                           [x3, y3, 1]])
+
+        D_x = -np.linalg.det([[x1 ** 2 + y1 ** 2, y1, 1],
+                              [x2 ** 2 + y2 ** 2, y2, 1],
+                              [x3 ** 2 + y3 ** 2, y3, 1]])
+
+        D_y = np.linalg.det([[x1 ** 2 + y1 ** 2, x1, 1],
+                             [x2 ** 2 + y2 ** 2, x2, 1],
+                             [x3 ** 2 + y3 ** 2, x3, 1]])
+
+        C = -np.linalg.det([[x1 ** 2 + y1 ** 2, x1, y1],
+                            [x2 ** 2 + y2 ** 2, x2, y2],
+                            [x3 ** 2 + y3 ** 2, x3, y3]])
+
+        # Calculate the center of the circle (a, b)
+        a = -D_x / (2 * D)
+        b = -D_y / (2 * D)
+
+        # Calculate the radius R
+        R = np.sqrt(a ** 2 + b ** 2 - C / D)
+
+        return R
+    def SolveStresses_CSA(self, moments, shearforces, center):
+        '''
+        performs sequence of
+        :return:
+        '''
+        Mx, My = moments
+        Sx, Sy = shearforces
+        # TODO: fix this so it's
+        E0, N0 = center # now relative to neutral axis point/centroid
+        self.Neutralpoints()
+        self.plotairfoil()
+        self.CalculateEI()
+        self.curvatures(30000, 0)
+        Mx = 30000
+        My = 0
+        Sx = 0
+        Sy = 100
+        self.E0 = -70
+        self.SectionShearFlows(Sx, Sy)
+        self.SectionShearCorrection()
+        self.ShearSuperPosition()
+        self.PlotShearFlow()
+        return
 
 class boom:
     def __init__(self):
@@ -588,24 +870,29 @@ class boom:
         self.location = [None, None]
         self.qs = 0
 
+
 class segment:
     def __init__(self):
         self.qs = None
         self.p1 = []
         self.p2 = []
-
 class section:
-    def __init__(self, members, Sx, Sy, leadingedge, trailingedge):
+    def __init__(self, members, Sx, Sy, leadingedge, trailingedge, A):
         self.members = members
         self.Sx, self.Sy = Sx, Sy
         self.leadingedge = leadingedge
         self.trailingedge = trailingedge
+        self.A = A
+
+        self.qs0 = None
+        self.Corrected = False
 
         # Functions to run on initialisation:
         self.CalculateShearMoment()
         self.CalculateDeltas()
         self.Calculate_int_qb_ds_over_t()
         self.CalculateG()
+        self.CalculatePrefactor()
 
     def CalculateShearMoment(self):
         moment = 0
@@ -621,11 +908,11 @@ class section:
             p1 = np.array(segment.p1)
             p2 = np.array(segment.p2)
             center = p1 + (p2 - p1)/2
-
             rx, ry = center[0], center[1]
 
             # force vector:
-            F = (segment.qs * (p2-p1)/np.linalg.norm(p2-p1)) * np.linalg.norm(p2-p1)
+            directionvector = p2-p1
+            F = segment.qs * directionvector
             Fx, Fy = F[0], F[1]
             M = rx * Fy -ry * Fx
             moment += M
@@ -636,38 +923,42 @@ class section:
             frontmember = self.members[-1]
             x1, y1 = frontmember.startcoord
             x2, y2 = frontmember.endcoord
-            self.deltafront = np.sqrt((x2 - x1)**2 + (y2 - y1)**2) / frontmember.h
+            self.deltafront = np.sqrt((x2 - x1)**2 + (y2 - y1)**2) / frontmember.panel.h
         if not self.trailingedge:
             backmember = self.members[1]
             x1, y1 = backmember.startcoord
             x2, y2 = backmember.endcoord
-            self.deltaback = np.sqrt((x2 - x1)**2 + (y2 - y1)**2) / backmember.h
+            self.deltaback = np.sqrt((x2 - x1)**2 + (y2 - y1)**2) / backmember.panel.h
 
-        deltastarmembers = 0
-        totallength = 0
+        deltawhole = 0
         for member in self.members:
             # find arc length of member:
             segments = member.segments
             memberarclength = 0
             for segment in segments:
-                x1, y1 = segment.p1[0], segment.p1[1]
-                x2, y2 = segment.p2[0], segment.p2[1]
-                segmentlength = np.sqrt((x2 - x1)**2 + (y2 - y1)**2)
+                # find the length of each segment and add to member arc length
+                p1 = np.array(segment.p1)
+                p2 = np.array(segment.p2)
+                segmentlength = abs(np.linalg.norm(p2-p1))
                 memberarclength += segmentlength
+
             member.arclength = memberarclength
-            deltastarmembers += (memberarclength**2)/member.panel.h
-            totallength += memberarclength
 
-        # weighted average ds/t of members:
-        self.deltawhole = deltastarmembers/totallength
+            # add the delta of this member!
+            deltawhole += memberarclength/member.panel.h
 
-        return self.deltafront, self.deltaback, self.deltawhole
+        self.deltawhole = deltawhole
+        return
 
     def Calculate_int_qb_ds_over_t(self):
-        productlist = [segment.qs * np.sqrt((segment.p2[0] - segment.p1[0])**2 + (segment.p2[1] - segment.p1[1])**2) for member in self.members for segment in member.segments]
+        productlist = []
+        for member in self.members:
+            productlistcurrent = [(segment.qs * np.linalg.norm(np.array(segment.p2)-np.array(segment.p1))) /member.panel.h for segment in member.segments]
+            productlist += productlistcurrent
+
         integral = sum(productlist)
         self.int_qb_ds_over_t = integral
-        return self.integral
+        return self.int_qb_ds_over_t
 
     def CalculateG(self):
         # find the average g modulus of the cross section somehow?
@@ -678,14 +969,80 @@ class section:
         self.G = sum(Glist)/sum(Arclengthlist)
         return self.G
 
+    def CalculatePrefactor(self):
+        self.prefactor = 1/(2 * self.G * self.A)
+        return 1/(2 * self.G * self.A)
+
+    def ShearCorrection(self):
+        if not self.Corrected:
+            for member in self.members:
+                for segment in member.segments:
+                    segment.qs += self.qs0
+            self.Corrected = True
+        else:
+            print('WARNING, cross section has already been corrected! Correction not carried out.')
+        return
+
+    def PlotShearFlow(self):
+        allsegments = []
+        for member in self.members:
+            newsegments = [(segment.p1, segment.p2, segment.qs) for segment in member.segments]
+            allsegments.extend(newsegments)  # Use extend instead of append to flatten the list
+
+        # Extract values to normalize
+        values = [value for _, _, value in allsegments]
+        min_value = min(values)
+        max_value = max(values)
+        max_abs_value = max(abs(min_value), abs(max_value))
+
+        # Determine the appropriate colormap and normalization
+        if max_value <= 0:
+            # All values are negative or zero, use absolute values for intensity
+            cmap = plt.get_cmap('Blues')
+            norm = Normalize(vmin=0, vmax=abs(min_value))
+            normalized_values = [abs(value) for value in values]
+        elif min_value >= 0:
+            # All values are positive or zero
+            cmap = plt.get_cmap('Reds')
+            norm = Normalize(vmin=0, vmax=max_value)
+            normalized_values = values
+        else:
+            # Values are both positive and negative, use symmetric normalization
+            cmap = plt.get_cmap('coolwarm')
+            norm = TwoSlopeNorm(vmin=-max_abs_value, vcenter=0, vmax=max_abs_value)
+            normalized_values = values
+
+        # Plot the lines
+        fig, ax = plt.subplots()
+        for (p1, p2), value in zip(
+                [(p1, p2) for p1, p2, value in allsegments],
+                normalized_values):
+            x1, y1 = p1
+            x2, y2 = p2
+            ax.plot([x1, x2], [y1, y2], color=cmap(norm(value)), linewidth=2)
+
+        # Set equal scaling
+        ax.set_aspect('equal', adjustable='box')
+
+        # Add a color bar
+        sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+        sm.set_array([])
+        fig.colorbar(sm, ax=ax, label='Value')
+
+        ax.set_xlabel('X-axis')
+        ax.set_ylabel('Y-axis')
+        ax.set_title('Lines with Value-Based Coloring')
+        plt.show()
+        return
+
 
 
 
 if __name__ == '__main__':
 
-    Laminate = LaminateBuilder([0], False, True, 1)
+    Laminate = LaminateBuilder([45, -45, 0 ,90], True, True, 1)
     Member = Member(Laminate)
-    sparlocations = [80, 200]
+    sparlocations = [80, 250]
     sparmembers = [copy.deepcopy(Member) for _ in range(len(sparlocations))]
     topmembers = [copy.deepcopy(Member) for _ in range(len(sparlocations)+1)]
     botmembers = [copy.deepcopy(Member) for _ in range(len(sparlocations)+1)]
@@ -694,12 +1051,21 @@ if __name__ == '__main__':
     Airfoil = Airfoil(type, 1, 300, sparlocations, topmembers, botmembers, sparmembers)
     Airfoil.Neutralpoints()
     Airfoil.plotairfoil()
-    print(Airfoil.CalculateEI())
-    print(Airfoil.curvatures(30000, 0))
+    Airfoil.CalculateEI()
+    Airfoil.curvatures(30000, 0)
     Mx = 30000
     My = 0
     Sx = 0
     Sy = 100
-    Airfoil.CalculateShearFlow(Sx, Sy, Mx, My)
-    Airfoil.ShearCorrection()
+    Airfoil.E0 = -70
+    Airfoil.Sx = Sx
+    Airfoil.Sy = Sy
+    Airfoil.SectionShearFlows(Sx, Sy)
+    Airfoil.SectionShearCorrection()
+    Airfoil.ShearSuperPosition()
     Airfoil.PlotShearFlow()
+    Airfoil.AssignMemberCurvature()
+    for member in Airfoil.topmembers:
+        member.CSA_FailureAnalysis()
+    Airfoil.PlotNormalStrain()
+    Airfoil.PlotNormalForceIntensity()
