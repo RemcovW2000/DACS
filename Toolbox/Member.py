@@ -147,8 +147,6 @@ class Member:
             FI = self.Loads[0]/Ncrit
         return abs(FI)
 
-
-
     def CombinedBucklingNcrit(self, Loads):
         D11 = self.panel.ABD_matrix[3, 3]
         D12 = self.panel.ABD_matrix[3, 4]

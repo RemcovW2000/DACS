@@ -6,6 +6,7 @@ class Sandwich:
         self.laminate1 = laminate1 # bottom laminate
         self.laminate2 = laminate2 # top laminate
         self.core = core
+        self.sandwich = True
 
         self.Loads = Loads
         self.Strains = Strains
@@ -16,6 +17,11 @@ class Sandwich:
         self.CalculateEquivalentProperties()
 
     def CalculateEquivalentABD(self):
+        '''
+        Calculates the ABD matrix for the sandwich structure
+        :return:
+        '''
+        # TODO: ADD TRANSVERSE SHEAR EFFECTS!!
         L1ABD = self.laminate1.CalculateCoreABD(self.core.h)
         L2ABD = self.laminate2.CalculateCoreABD(self.core.h)
 
@@ -38,12 +44,30 @@ class Sandwich:
         return
 
     def FailureAnalysis(self):
-        # First calculate loads:
+        '''
+        this is the general faulure analysis function
+
+        Output should be a single scalar value, containing the failure indicator
+        FI>0, when FI = 1 failure occurs at the applied load
+        Loads must be assigned BEFORE calling this function!
+        '''
+        # First calculate loads on each facesheet:
+        # This function also ASSIGNS LOADS TO THE LAMINATES!
         self.FaceSheetLoadDistribution()
 
-        # Check wrinkling and FPF:
+        # then we can check first ply failure for both facesheets:
         FPFFI = self.LaminateFPF()
         print('first ply failure FI:', FPFFI)
+
+        # Now we can also check facesheet wrinkling for the specific loadcase
+        # NOTE: both facesheets must be analyzed seperately
+        # for both facesheets find the principal directions and stresses:
+        L1stresses, L1directions = self.laminate1.principal_stresses_and_directions()
+
+        L2stresses, L2directions = self.laminate2.principal_stresses_and_directions()
+
+        # Now use known formulas to find the failure indicators:
+
 
         return
 
@@ -52,6 +76,10 @@ class Sandwich:
         maxFI1 = self.laminate1.FailureAnalysis()[2]
         maxFI2 = self.laminate2.FailureAnalysis()[2]
         return max(maxFI1, maxFI2)
+
+    def WrinklingAnalysis(self):
+
+        return
 
     def FaceSheetLoadDistribution(self):
         # Normal loads are as follows:

@@ -10,6 +10,7 @@ class Laminate:
         # The laminate layers are ordened by the order of the list, from bottom to top.
         self.laminas = laminas
         self.Loads   = Loads
+        self.sandwich = False
 
         # The laminate also has a failure state, which is a list with the failure state of each lamina:
         self.ProgressiveDamageAnalysis = False
@@ -205,7 +206,6 @@ class Laminate:
         maxfailurefactor = np.max(FailureFactors)
         return self.FailureState, failedlamina, maxfailurefactor
 
-
     def Ncrit(self):
         maxfailurefactor = self.FailureAnalysis()
         Ncrit = self.Loads / maxfailurefactor
@@ -367,6 +367,38 @@ class Laminate:
         # Transform the ABD matrix
         ABD_transformed = T_ext @ self.ABD_matrix @ T_ext.T
         return ABD_transformed
+
+    def principal_stresses_and_directions(self):
+        """
+        Calculate the principal stresses and their corresponding directions
+        given a 2D stress tensor.
+
+        Parameters:
+        stress_tensor (2x2 numpy array): The 2D stress tensor.
+
+        Returns:
+        tuple: A tuple containing:
+               - principal_stresses (1D numpy array): The principal stresses.
+               - principal_directions (2D numpy array): The corresponding principal directions (eigenvectors).
+        """
+        # find stress tensor based on loads and thickness:
+        Sx = self.Loads[0]/self.h
+        Sy = self.Loads[1]/self.h
+        Sxy = self.Loads[2]/self.h
+
+        stress_tensor = np.array([[Sx, Sxy],
+                                  [Sxy, Sy]])
+
+        # Calculate the eigenvalues (principal stresses) and eigenvectors (principal directions)
+        principal_stresses, principal_directions = np.linalg.eig(stress_tensor)
+
+        # Ensure the principal stresses are ordered from largest to smallest
+        idx = np.argsort(principal_stresses)[::-1]
+        principal_stresses = principal_stresses[idx]
+        principal_directions = principal_directions[:, idx]
+
+        return principal_stresses, principal_directions
+
 
 def LaminateBuilder(angleslist,symmetry, copycenter, multiplicity, type = None):
     if symmetry == True:
