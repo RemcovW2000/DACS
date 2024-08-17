@@ -17,8 +17,7 @@ class Airfoil:
         We make the assumption that the laminate does not change within a member!
         For now we'll assume the whole structure is sandwich panel?
 
-        :param riblocations: locations from LE to TE of spars
-        :param laminates: Members from rib to rib
+        :param sparlocations: locations from LE to TE of spars
         :param airfoilname:
         :param thickness:
         :param chordlength:
@@ -46,7 +45,9 @@ class Airfoil:
 
         self.FindMemberLocations()
 
-        self.segmentlength = 1 #length of segments in mm
+        self.segmentlength = 0.1 #length of segments in mm
+        self.Mx = 0
+        self.My = 0
         self.Sx = 0
         self.Sy = 0
         self.N0 = 0
@@ -403,6 +404,8 @@ class Airfoil:
         return
 
     def GenerateSparBooms(self):
+        Mx = self.Mx
+        My = self.My
         kx, ky = self.curvatures(Mx, My)
         def CalculateBoomAreas(p1, p2, member):
             # having 2 points, we obtain 2 strains and stresses
@@ -479,8 +482,8 @@ class Airfoil:
         return Brxr, Bryr
 
     def SectionShearFlows(self, Sx, Sy):
-        self.GenerateBooms(self.topmembers, 'top', Mx, My)
-        self.GenerateBooms(self.botmembers, 'bot', Mx, My)
+        self.GenerateBooms(self.topmembers, 'top', self.Mx, self.My)
+        self.GenerateBooms(self.botmembers, 'bot', self.Mx, self.My)
         self.GenerateSparBooms()
         # initialize section list:
         self.sectionlist = []
@@ -505,8 +508,8 @@ class Airfoil:
             # now calculate the shear flow:
             # We then pass this member list and calculate the shear flow for the open cross section:
             self.Calculate_SectionShearFlow(memberlist, Sx, Sy)
-            toppoints = [topmember.segments[i].p1 for i in range(len(topmember.segments))]
-            botpoints = [botmember.segments[i].p1 for i in range(len(botmember.segments))]
+            toppoints = [topmember.booms[i].location for i in range(len(topmember.booms))]
+            botpoints = [botmember.booms[i].location for i in range(len(botmember.booms))]
             A = self.calculate_area(toppoints, botpoints)
             # determine if the current section is at a leading or trailing edge:
             leadingedge = False
@@ -524,6 +527,8 @@ class Airfoil:
         return
 
     def SectionShearCorrection(self):
+        for Section in self.sectionlist:
+            Section.PlotShearFlow()
         # set up system of equations!
         array = np.zeros((len(self.sectionlist) + 1, len(self.sectionlist) + 1))
         for i, section in enumerate(self.sectionlist):
@@ -666,7 +671,7 @@ class Airfoil:
 
         ax.set_xlabel('X-axis')
         ax.set_ylabel('Y-axis')
-        ax.set_title('Lines with Value-Based Coloring')
+        ax.set_title('Shear flow, clockwise is positive, from the origin')
         plt.show()
         return
 
@@ -681,7 +686,7 @@ class Airfoil:
 
         x_coords = [point[0] for point in coordinates]
         y_coords = [point[1] for point in coordinates]
-        kx, ky = self.curvatures(Mx, My)
+        kx, ky = self.curvatures(self.Mx, self.My)
 
         # having 2 points, we obtain 2 strains and stresses
 
@@ -843,24 +848,31 @@ class Airfoil:
         performs sequence of
         :return:
         '''
-        Mx, My = moments
-        Sx, Sy = shearforces
-        # TODO: fix this so it's
-        E0, N0 = center # now relative to neutral axis point/centroid
+        self.Mx, self.My = moments
+        self.Sx, self.Sy = shearforces
+        # TODO: fix these dimensions so they are in the global (wing) FOR?
+        self.E0, self.N0 = center # now relative to neutral axis point/centroid
+
+        # Functions for the normal stresses/deformations:
         self.Neutralpoints()
-        self.plotairfoil()
         self.CalculateEI()
-        self.curvatures(30000, 0)
-        Mx = 30000
-        My = 0
-        Sx = 0
-        Sy = 100
-        self.E0 = -70
-        self.SectionShearFlows(Sx, Sy)
+        self.curvatures(self.Mx, self.My)
+
+        # Functions for shear stress solving
+        self.SectionShearFlows(self.Sx, self.Sy)
         self.SectionShearCorrection()
         self.ShearSuperPosition()
         self.PlotShearFlow()
         return
+
+    def FailureAnalysis_CSA(self):
+        # first set the curvature of the members:
+        self.AssignMemberCurvature()
+        # then we can perform the failure analysis
+        allmembers = self.topmembers + self.botmembers + self.sparmembers
+        memberFIs = [member.CSA_FailureAnalysis() for member in allmembers]
+
+        return max(memberFIs)
 
 class boom:
     def __init__(self):
@@ -916,19 +928,23 @@ class section:
             Fx, Fy = F[0], F[1]
             M = rx * Fy -ry * Fx
             moment += M
+
         return moment
 
     def CalculateDeltas(self):
         if not self.leadingedge:
             frontmember = self.members[-1]
-            x1, y1 = frontmember.startcoord
-            x2, y2 = frontmember.endcoord
-            self.deltafront = np.sqrt((x2 - x1)**2 + (y2 - y1)**2) / frontmember.panel.h
+
+            difference = np.array(frontmember.endcoord) - np.array(frontmember.startcoord)
+
+            arclength = np.linalg.norm(difference)
+            self.deltafront = arclength / frontmember.panel.h
         if not self.trailingedge:
             backmember = self.members[1]
-            x1, y1 = backmember.startcoord
-            x2, y2 = backmember.endcoord
-            self.deltaback = np.sqrt((x2 - x1)**2 + (y2 - y1)**2) / backmember.panel.h
+            difference = np.array(backmember.endcoord) - np.array(backmember.startcoord)
+
+            arclength = np.linalg.norm(difference)
+            self.deltaback = arclength / backmember.panel.h
 
         deltawhole = 0
         for member in self.members:
@@ -1049,23 +1065,5 @@ if __name__ == '__main__':
 
     type = 'e395-il'
     Airfoil = Airfoil(type, 1, 300, sparlocations, topmembers, botmembers, sparmembers)
-    Airfoil.Neutralpoints()
-    Airfoil.plotairfoil()
-    Airfoil.CalculateEI()
-    Airfoil.curvatures(30000, 0)
-    Mx = 30000
-    My = 0
-    Sx = 0
-    Sy = 100
-    Airfoil.E0 = -70
-    Airfoil.Sx = Sx
-    Airfoil.Sy = Sy
-    Airfoil.SectionShearFlows(Sx, Sy)
-    Airfoil.SectionShearCorrection()
-    Airfoil.ShearSuperPosition()
-    Airfoil.PlotShearFlow()
-    Airfoil.AssignMemberCurvature()
-    for member in Airfoil.topmembers:
-        member.CSA_FailureAnalysis()
-    Airfoil.PlotNormalStrain()
-    Airfoil.PlotNormalForceIntensity()
+    Airfoil.SolveStresses_CSA([30000, 0], [0, 100], [-70, 0])
+    print(Airfoil.FailureAnalysis_CSA())

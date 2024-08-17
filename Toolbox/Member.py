@@ -83,14 +83,14 @@ class Member:
         lc4 = [minnormalstress, 0, maxshearstress, 0, 0 ,0]
         loadcases = [lc1, lc2, lc3, lc4]
 
-        # we have to check all loadcases for FPF:
-        failureindicators_FPF = []
+        # we have to check all loadcases for panel failure:
+        failureindicators_panel = []
         for loadcase in loadcases:
             self.panel.Loads = loadcase
-            failureindicators_FPF.append(self.panel.FailureAnalysis())
+            failureindicators_panel.append(self.panel.FailureAnalysis())
         print('')
-        print('failure indicators first ply failure for all loadcases:')
-        print(failureindicators_FPF)
+        print('failure indicators for panels:')
+        print(failureindicators_panel)
         print('')
 
         # now we check buckling: take largest abslute value for the shear load and combine it with the
@@ -108,7 +108,9 @@ class Member:
         print('loads assigned for buckling: ', self.Loads)
         print('Buckling FI:', BucklingFI)
         print('-------------------------------------------------------------------------------------')
-        return
+        FIlist = failureindicators_panel + [BucklingFI]
+        print('all FI:', FIlist)
+        return max(FIlist)
 
     def BucklingAnalysis(self):
         '''
@@ -165,6 +167,9 @@ class Member:
 
         term2 = 5 - np.sqrt(9 + (65536*self.a**2*k**2)/(81*np.pi**4*self.b**2))
         Ncrit = abs((Ncritnorm/denominator)*term2)
+
+        # Now obtain the scaling factor from the panel:
+        Ncrit = self.panel.BucklingSchalingFactor(Ncrit)
         return Ncrit
 
     def Calculate_b(self):

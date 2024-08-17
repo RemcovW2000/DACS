@@ -4,6 +4,11 @@ class Core:
         self.h = h
         self.coreproperties = coreproperties
 
+        if self.coreproperties['G']:
+            self.G = self.coreproperties['G']
+        else:
+            self.G = None
+
     def Gxbarz(self, theta):
         Gxz = self.coreproperties['Gxz']
         Gyz = self.coreproperties['Gyz']

@@ -179,6 +179,9 @@ class Laminate:
         maxfailurefactor = max(FailureIndicators)
         return maxfailurefactor
 
+    def BucklingSchalingFactor(self, Ncrit):
+        return Ncrit
+
     def PDA_FailureAnalysis(self):
         # We need to make sure the lamina have stresses:
         self.StressAnalysis()
@@ -382,22 +385,22 @@ class Laminate:
                - principal_directions (2D numpy array): The corresponding principal directions (eigenvectors).
         """
         # find stress tensor based on loads and thickness:
-        Sx = self.Loads[0]/self.h
-        Sy = self.Loads[1]/self.h
-        Sxy = self.Loads[2]/self.h
+        Sx = self.Loads[0]
+        Sy = self.Loads[1]
+        Sxy = self.Loads[2]
 
         stress_tensor = np.array([[Sx, Sxy],
                                   [Sxy, Sy]])
 
         # Calculate the eigenvalues (principal stresses) and eigenvectors (principal directions)
-        principal_stresses, principal_directions = np.linalg.eig(stress_tensor)
+        principal_loadintensities, principal_directions = np.linalg.eig(stress_tensor)
 
         # Ensure the principal stresses are ordered from largest to smallest
-        idx = np.argsort(principal_stresses)[::-1]
-        principal_stresses = principal_stresses[idx]
+        idx = np.argsort(principal_loadintensities)[::-1]
+        principal_stresses = principal_loadintensities[idx]
         principal_directions = principal_directions[:, idx]
 
-        return principal_stresses, principal_directions
+        return principal_loadintensities, principal_directions
 
 
 def LaminateBuilder(angleslist,symmetry, copycenter, multiplicity, type = None):

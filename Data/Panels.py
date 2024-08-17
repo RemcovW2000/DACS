@@ -26,8 +26,8 @@ Sandwiches = {
                                LaminateBuilder([0, 45], False, True, 1, 'T700'),
                                Core(2, corematerials['ROHACELL31A'])
                                ),
-    # 'PanelWingTip' : Sandwich(LaminateBuilder([0], False, False, 1, 'S2Glass80gsm'),
-    #                           LaminateBuilder([0, 45], False, False, 1, 'S2Glass80gsm'),
-    #                           Core(2, corematerials['ROHACELL31A'])
-    #                           )
+    'SparPanels' : Sandwich(LaminateBuilder([45], False, False, 1, 'ezcomposites_spreadtow'),
+                              LaminateBuilder([45], False, False, 1, 'ezcomposites_spreadtow'),
+                              Core(2, corematerials['ROHACELL31A'])
+                              )
 }

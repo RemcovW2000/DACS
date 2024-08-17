@@ -139,7 +139,25 @@ class Laminate:
         v21b = -D[0, 1] / D[0, 0]
         return [Ex, Ey, vxy, vyx, Gxy], [E1b, E2b, G12b, v12b, v21b]
 
+    def CalculateEquivalentProperties_attheta(self, theta):
 
+        # Here we calculate the engineering constants (or equivalent properties):
+        Ex = (self.A_matrix[0, 0] * self.A_matrix[1, 1] - self.A_matrix[0, 1] ** 2) / (self.h * self.A_matrix[1, 1])
+        Ey = (self.A_matrix[0, 0] * self.A_matrix[1, 1] - self.A_matrix[0, 1] ** 2) / (self.h * self.A_matrix[0, 0])
+
+        vxy = self.A_matrix[0, 1] / self.A_matrix[1, 1]
+        vyx = self.A_matrix[0, 1] / self.A_matrix[0, 0]
+
+        Gxy = self.A_matrix[2, 2] / self.h
+
+        D = np.linalg.inv(self.D_matrix)
+
+        E1b = 12/(self.h**3 * D[0,0])
+        E2b = 12/(self.h**3 * D[1,1])
+        G12b = 12 / (self.h ** 3 * D[2,2])
+        v12b = -D[0,1]/D[1,1]
+        v21b = -D[0, 1] / D[0, 0]
+        return [Ex, Ey, vxy, vyx, Gxy], [E1b, E2b, G12b, v12b, v21b]
 
     def StressAnalysis(self):
         # We need to make sure the lamina have strains:

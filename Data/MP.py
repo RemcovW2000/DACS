@@ -107,6 +107,7 @@ corematerials = {
         'Syz': 0.4,
         'Gyz': 13,
         'Xc': 0.4,
-        'rho': 32
+        'rho': 32,
+        'G' : 13 # we set this only for isotropic foams! non isotropic materials should not have this, as it should throw an error if called but not existent
     }
 }

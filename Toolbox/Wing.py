@@ -1,4 +1,5 @@
 import numpy as np
+import copy
 import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d
 from Toolbox.Airfoil import Airfoil
@@ -48,6 +49,7 @@ class Wing:
         self.ribcoordinates = ribcoordinates
         self.toppanels = []
         self.botpanels = []
+        self.sparpanels = []
 
     def lift_at(self, y):
         """
@@ -159,17 +161,23 @@ class Wing:
     def topmembers_at(self, y):
         # for a given location y, there must be members defined ->
         spars = self.spar_positions_at(y)
-        panel = self.panels_at(self.toppanels, y)
+        panel = copy.deepcopy(self.panels_at(self.toppanels, y))
 
         topmembers = [Member(panel) for _ in range(len(spars)+1)]
         return topmembers
 
     def botmembers_at(self, y):
         spars = self.spar_positions_at(y)
-        panel = self.panels_at(self.botpanels, y)
+        panel = copy.deepcopy(self.panels_at(self.botpanels, y))
 
         botmembers = [Member(panel) for _ in range(len(spars)+1)]
         return botmembers
+
+    def sparmembers_at(self, y):
+        spars = self.spar_positions_at(y)
+        panel = copy.deepcopy(self.sparpanels)
+        sparmembers = [Member(panel) for _ in range(len(spars))]
+        return sparmembers
 
     def curvatures_at(self, y):
         """
@@ -183,13 +191,55 @@ class Wing:
         chordlength = self.chord_at(y)
         topmembers = self.topmembers_at(y)
         botmembers = self.botmembers_at(y)
-        airfoil = Airfoil('e395-il', thickness, chordlength, spars, topmembers, botmembers)
+        sparmembers = self.sparmembers_at(y)
+        airfoil = Airfoil('NACA2410', thickness, chordlength, spars, topmembers, botmembers, sparmembers)
         airfoil.Neutralpoints()
         airfoil.CalculateEI()
         kx, ky = airfoil.curvatures(moment, 0)
         return kx, ky
 
-    def calculate_deflection(self, num_points=100):
+    def FailureAnalysis_at(self, y):
+        moment = self.moment_at(y)
+        shear = self.shear_at(y)
+        spars = self.spar_positions_at(y) - self.LE_at(
+            y)  # list of spar locations? or of objects? these indicate the locations of the spars for
+        # cross sectional analysis
+        thickness = self.thickness_at(y)
+        chordlength = self.chord_at(y)
+        topmembers = self.topmembers_at(y)
+        botmembers = self.botmembers_at(y)
+        sparmembers = self.sparmembers_at(y)
+        airfoil = Airfoil('NACA2410', thickness, chordlength, spars, topmembers, botmembers, sparmembers)
+
+        # First solve for the stresses:
+        airfoil.SolveStresses_CSA([moment, 0], [0, shear], [-70, 0])
+
+        # Then do the failure analysis:
+        airfoilFI = airfoil.FailureAnalysis_CSA()
+        return airfoilFI
+
+    def FIplot(self, num):
+        '''
+        Check failure at a certain nr of points. Especially right behind the ribs
+        :return:
+        '''
+        # TODO: remove -300
+        ycoordinates = np.linspace(0, self.halfspan-300, num)
+        RIBFIs = [self.FailureAnalysis_at(coordinate) for coordinate in ycoordinates]
+        print('RIBFIs calculated')
+
+        # max FI as func of span
+        plt.figure(figsize=(10, 6))
+        plt.plot(ycoordinates, RIBFIs, label='Max found failure indicator at point through half span')
+        plt.xlabel('Half-span (y)')
+        plt.ylabel('Max FI')
+        plt.title('Failure indicators')
+        plt.legend()
+        plt.grid(True)
+        plt.show()
+        return max(RIBFIs)
+
+    def calculate_deflection(self, num_points=10):
         # Sample points along the half span
         y_points = np.linspace(0, self.halfspan, num=num_points)
 
@@ -307,7 +357,7 @@ def generate_lift(n, halfspan, lift):
     return lifts
 
 # Example usage:
-n = 1000  # Number of points
+n = 20  # Number of points
 halfspan = 1500  # Half span of the wing
 coord_at_root = 300  # Chord length at the root
 
@@ -317,8 +367,10 @@ chord_lengths, leading_edge_locations = generate_chord_and_leading_edge(n, halfs
 liftdistribution = generate_lift(10, 1500, 981)
 thicknessdistribution = [10, 12, 14, 16, 18]  # Example thickness distribution
 halfspan = 1500  # Half span of the wing
-sparcoordinates = [[[300/4, 0], [15 + 250/4, 1000], [75, 1500]], [[200, 0], [185, 1000], [75, 1500]]]  # Example spar coordinates
+sparcoordinates = [[[300/4, 0], [15 + 250/4, 1000], [75, 1500]],
+                   [[200, 0], [185, 1000], [75, 1500]]]  # Example spar coordinates
 ribcoordinates = [0, 600, 1200, 1400]
+
 
 
 
@@ -326,6 +378,7 @@ wing = Wing(liftdistribution, chord_lengths, leading_edge_locations, thicknessdi
 
 wing.toppanels = [[Sandwiches['PanelWingRoot'], 500], [Sandwiches['PanelWingRoot'], 1600]]
 wing.botpanels = [[Sandwiches['PanelWingRoot'], 500], [Sandwiches['PanelWingRoot'], 1600]]
+wing.sparpanels = Sandwiches['SparPanels']
 moment_distribution = wing.internal_moment()
 shear_distribution = wing.shear_force()
 
@@ -343,4 +396,5 @@ print('airfoil curvature:', location, ":", wing.curvatures_at(location))
 
 # Plot the wing planform
 wing.plot_wing_planform()
-wing.plot_deflection(100)
+wing.plot_deflection(10)
+print(wing.FIplot(10))

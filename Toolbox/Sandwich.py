@@ -1,5 +1,9 @@
 import numpy as np
-
+from Toolbox.Laminate import Laminate
+from Toolbox.Laminate import LaminateBuilder
+from Toolbox.Core import Core
+import Data.Panels
+import copy
 
 class Sandwich:
     def __init__(self, laminate1, laminate2, core, Loads = None, Strains = None):
@@ -66,20 +70,74 @@ class Sandwich:
 
         L2stresses, L2directions = self.laminate2.principal_stresses_and_directions()
 
+        # using the directions we can find the material strength in that direction
+        wrinklingFI1 = self.WrinklingAnalysis(L1stresses, L1directions, self.laminate1)
+        wrinklingFI2 = self.WrinklingAnalysis(L2stresses, L2directions, self.laminate2)
         # Now use known formulas to find the failure indicators:
-
-
-        return
+        print('WrinklingFIs: ', wrinklingFI1, wrinklingFI2)
+        # Return largest FI!
+        FImax = max([wrinklingFI1, wrinklingFI2, FPFFI])
+        return FImax
 
     def LaminateFPF(self):
         # loads are assigned
-        maxFI1 = self.laminate1.FailureAnalysis()[2]
-        maxFI2 = self.laminate2.FailureAnalysis()[2]
+        maxFI1 = self.laminate1.FailureAnalysis()
+        maxFI2 = self.laminate2.FailureAnalysis()
         return max(maxFI1, maxFI2)
 
-    def WrinklingAnalysis(self):
+    def BucklingSchalingFactor(self, Ncrit):
+        # Assuming k = 1 for now:
+        k = 1
+        Nxcrit = Ncrit/(1+Ncrit/(self.core.h*self.core.G))
+        return Nxcrit
 
-        return
+    def WrinklingAnalysis(self, laminatestresses, laminatedirections, laminate):
+        # We obtain stresses and directions:
+        # TODO: take into account assymetric laminates
+        negative_values = laminatestresses[laminatestresses < 0]
+        if len(negative_values) > 0:
+            # Find the index of the negative value with the largest absolute value
+            max_negative_index = np.where(laminatestresses == negative_values[np.argmax(np.abs(negative_values))])[0][0]
+            direction = laminatedirections[max_negative_index]
+
+            # now calculate E at the given angle:
+            vx, vy = direction[0], direction[1]
+            theta = np.arctan2(vy, vx)  # Calculate the angle theta in radians
+
+            cos_theta = np.cos(theta)
+            sin_theta = np.sin(theta)
+
+            # Calculate 1/E_theta using the formula
+            E_theta_inv = (
+                    (cos_theta ** 4) / laminate.Ex +
+                    (sin_theta ** 4) / laminate.Ey +
+                    (2 * sin_theta ** 2 * cos_theta ** 2) / laminate.Gxy +
+                    (2 * laminate.vxy * cos_theta ** 2 * sin_theta ** 2) / laminate.Ex
+            )
+
+            # Inverse to get E_theta
+            E_theta = 1 / E_theta_inv
+
+            # use the E_theta to find the FI in the given direction
+            G_core = self.core.Gxbarz(np.deg2rad(theta))
+            Ez = self.core.coreproperties['Ez']
+            t_core = self.core.h
+            t_face = laminate.h
+
+
+            symthick = abs(self.SymThickWrinkling(Ez, t_face, E_theta, G_core))
+
+            asymthin = abs(self.SymThinWrinkling(Ez, t_core, t_face, E_theta, G_core))
+            if symthick < asymthin:
+                Nwrinkle = symthick
+            else:
+                Nwrinkle = asymthin
+
+            FI = abs(laminatestresses[max_negative_index]/Nwrinkle)
+
+        else:
+            FI = 0
+        return FI
 
     def FaceSheetLoadDistribution(self):
         # Normal loads are as follows:
@@ -89,15 +147,15 @@ class Sandwich:
         # Divide normal loads between facesheets based on EA of facesheets
 
         # Assign Nx:
-        Ext1 = self.laminate1.Ex*self.laminate1.t
-        Ext2 = self.laminate2.Ex*self.laminate2.t
+        Ext1 = self.laminate1.Ex*self.laminate1.h
+        Ext2 = self.laminate2.Ex*self.laminate2.h
 
         Nx1 = Nx*(Ext1/(Ext1+Ext2))
         Nx2 = Nx*(Ext2/(Ext1+Ext2))
 
         # Assign Ny:
-        Eyt1 = self.laminate1.Ey*self.laminate1.t
-        Eyt2 = self.laminate2.Ey*self.laminate2.t
+        Eyt1 = self.laminate1.Ey*self.laminate1.h
+        Eyt2 = self.laminate2.Ey*self.laminate2.h
 
         Ny1 = Ny*(Eyt1/(Eyt1 + Eyt2))
         Ny2 = Ny*(Eyt2/(Eyt1 + Eyt2))
@@ -105,8 +163,8 @@ class Sandwich:
         Ns = self.Loads[2]
 
         # Divide shear loads between facesheets based on shear stifness GA of facesheets
-        Gt1 = self.laminate1.Gxy*self.laminate1.t
-        Gt2 = self.laminate2.Gxy*self.laminate2.t
+        Gt1 = self.laminate1.Gxy*self.laminate1.h
+        Gt2 = self.laminate2.Gxy*self.laminate2.h
 
         Ns1 = Ns*(Gt1/(Gt1 + Gt2))
         Ns2 = Ns*(Gt2/(Gt1 + Gt2))
@@ -166,4 +224,8 @@ class Sandwich:
         Ns_w = 0.33 * t_face ** (3 / 2) * np.sqrt(Ez * E_f / t_core)
         return Ns_w
 
+if __name__ == '__main__':
+    sandwich = copy.deepcopy(Data.Panels.Sandwiches['PanelWingRoot'])
+    sandwich.Loads = [-10, 0, 2, 0, 0, 0]
+    sandwich.FailureAnalysis()
 
