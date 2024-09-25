@@ -10,6 +10,8 @@ from Toolbox.DamagedRegion import *
 from Toolbox.Member import Member
 from scipy.integrate import simps
 from matplotlib.colors import Normalize, TwoSlopeNorm
+from scipy.linalg import lstsq
+import math
 
 class Airfoil:
     def __init__(self, airfoilname, thickness, chordlength, sparlocations, topmembers, botmembers, sparmembers):
@@ -45,7 +47,8 @@ class Airfoil:
 
         self.FindMemberLocations()
 
-        self.segmentlength = 0.1 #length of segments in mm
+        self.segmentlength = 1 #length of segments in mm
+        self.structuralidealisation = True
         self.Mx = 0
         self.My = 0
         self.Sx = 0
@@ -190,7 +193,7 @@ class Airfoil:
         EAxtot = 0
         EAtot = 0
         for member in self.topmembers:
-            npoints = 100  # TODO: placeholder!
+            npoints = 10  # TODO: placeholder!
             # in the topmembers list, we know the start and end coordinates:
             xlist = np.linspace(member.startcoord[0], member.endcoord[0], npoints)
             for i, x in enumerate(xlist):
@@ -218,7 +221,7 @@ class Airfoil:
                 EAtot += EA
 
         for member in self.botmembers:
-            npoints = 100  # TODO: placeholder!
+            npoints = 10  # TODO: placeholder!
             # in the topmembers list, we know the start and end coordinates:
             xlist = np.linspace(member.startcoord[0], member.endcoord[0], npoints)
             for i, x in enumerate(xlist):
@@ -377,7 +380,10 @@ class Airfoil:
         for member in memberlist if side == 'top' else reversed(memberlist):
             start = np.array(member.startcoord)
             end = np.array(member.endcoord)
-            npoints = round(abs(np.linalg.norm(end-start)/self.segmentlength))
+            if self.structuralidealisation:
+                npoints = 2
+            else:
+                npoints = round(abs(np.linalg.norm(end-start)/self.segmentlength))
             # in the topmembers list, we know the start and end coordinates:
             xlist = np.linspace(member.startcoord[0] if side == 'top' else member.endcoord[0], member.endcoord[0] if side == 'top' else member.startcoord[0], npoints)
             boomplaceholder = boom()
@@ -427,7 +433,10 @@ class Airfoil:
         for i, member in enumerate(self.sparmembers):
             start = np.array(member.startcoord)
             end = np.array(member.endcoord)
-            npoints = round(abs(np.linalg.norm(end - start) / self.segmentlength))
+            if self.structuralidealisation:
+                npoints = 2
+            else:
+                npoints = round(abs(np.linalg.norm(end - start) / self.segmentlength))
             ylocations = np.linspace(member.startcoord[1], member.endcoord[1], npoints)
             x = member.startcoord[0]
 
@@ -530,30 +539,55 @@ class Airfoil:
         for Section in self.sectionlist:
             Section.PlotShearFlow()
         # set up system of equations!
+
+        # condition matrix by using differnt units! currenly units are all N and mm
+        # we can arbitrarily change the unit to match the magnitude of the numbers.
+
+        # find the order of magnitude for the force intensities:
+        sectionfortest = self.sectionlist[1]
+        forceintesity = sectionfortest.prefactor * sectionfortest.deltawhole
+        order_forceintensity = np.floor(np.log10(abs(forceintesity)))
+        print('order force intensity: ',order_forceintensity)
+
+        # now find the order of magnitude for the areas:
+        areasection = sectionfortest.A
+        order_areasection = np.floor(np.log10(abs(areasection)))
+        print('order areasection: ',order_areasection)
+
+        deltaorder_magnitude = abs(order_areasection - order_forceintensity)
+        deltaorder_unit = np.round(deltaorder_magnitude/3)
+
+        # figure out scaling factors:
+        Ascalingfactor = 10**(-2*deltaorder_unit)
+        qscalingfactor = 10**(deltaorder_unit)
+        Mscalingfactor = 10**(-deltaorder_unit)
+        radscalingfactor = 10**(order_forceintensity + deltaorder_unit)
+
         array = np.zeros((len(self.sectionlist) + 1, len(self.sectionlist) + 1))
+
         for i, section in enumerate(self.sectionlist):
             if i == 0:
-                array[i, i] = section.prefactor * section.deltawhole
-                array[i, i + 1] = -section.prefactor * section.deltaback
+                array[i, i] = section.prefactor * section.deltawhole * qscalingfactor
+                array[i, i + 1] = -section.prefactor * section.deltaback * qscalingfactor
             elif i == len(self.sectionlist)-1:
-                array[i, i] = section.prefactor * section.deltawhole
-                array[i, i-1] = -section.prefactor * section.deltafront
+                array[i, i] = section.prefactor * section.deltawhole * qscalingfactor
+                array[i, i-1] = -section.prefactor * section.deltafront * qscalingfactor
             else:
-                array[i, i] = section.prefactor * section.deltawhole
-                array[i, i + 1] = -section.prefactor * section.deltaback
-                array[i, i - 1] = -section.prefactor * section.deltafront
+                array[i, i] = section.prefactor * section.deltawhole * qscalingfactor
+                array[i, i + 1] = -section.prefactor * section.deltaback * qscalingfactor
+                array[i, i - 1] = -section.prefactor * section.deltafront * qscalingfactor
 
-            array[i, len(self.sectionlist)] = -1
+            array[i, len(self.sectionlist)] = -1 * radscalingfactor
 
         # add last equation:
-        array[-1, : -1] = [2*section.A for section in self.sectionlist]
+        array[-1, : -1] = [2*section.A * Ascalingfactor for section in self.sectionlist]
         # define vector:
         vector = np.zeros(len(self.sectionlist) + 1)
         for i, section in enumerate(self.sectionlist):
-            vector[i] = -section.int_qb_ds_over_t * section.prefactor
-        vector[-1] = sum([section.ShearMoment for section in self.sectionlist])
+            vector[i] = -section.int_qb_ds_over_t * section.prefactor * qscalingfactor
+        vector[-1] = sum([section.ShearMoment * Mscalingfactor for section in self.sectionlist])
 
-        vector[-1] += self.Sx*self.N0 - self.Sy * self.E0
+        vector[-1] += (self.Sx*self.N0 - self.Sy * self.E0) * Mscalingfactor
         print('--------------------------------------------------------------------------')
         print('array:')
         print(array)
@@ -561,7 +595,11 @@ class Airfoil:
         print(vector)
         print('--------------------------------------------------------------------------')
         # we now solve the system
-        x = np.linalg.solve(array, vector)
+        x, residuals, rank, s = lstsq(array, vector)
+        x[:-1] = x[:-1] / qscalingfactor
+        x[-1] = x[-1] / radscalingfactor
+        condnr = np.linalg.cond(array)
+        print('conditioning nr:', condnr)
         print('solution vector:', x)
         # the shear flow corrections are as follows:
         correctionfactors = x[0:-1]
@@ -862,7 +900,45 @@ class Airfoil:
         self.SectionShearFlows(self.Sx, self.Sy)
         self.SectionShearCorrection()
         self.ShearSuperPosition()
+        # we want to check the total shear force exerted by the section:
+        self.ShearforceAnalysis()
         self.PlotShearFlow()
+        return
+
+    def ShearforceAnalysis(self):
+        Fx = 0
+        Fy = 0
+        for member in self.topmembers:
+            for segment in member.segments:
+                x1, y1 = segment.p1
+                x2, y2 = segment.p2
+                dx = x2 - x1
+                dy = y2 - y1
+                Fx += segment.qs * dx
+                Fy += segment.qs * dy
+
+        for member in self.botmembers:
+            for segment in member.segments:
+                x1, y1 = segment.p1
+                x2, y2 = segment.p2
+                dx = x2 - x1
+                dy = y2 - y1
+                print(dy)
+                print('qs:', segment.qs)
+                Fx += -segment.qs * dx
+                Fy += -segment.qs * dy
+
+        for member in self.sparmembers:
+            for segment in member.segments:
+                x1, y1 = segment.p1
+                x2, y2 = segment.p2
+                dx = x2 - x1
+                dy = y2 - y1
+                Fx += -segment.qs * dx
+                Fy += -segment.qs * dy
+
+        print('Fx from segments: ', Fx)
+        print('Fy from segments: ', Fy)
         return
 
     def FailureAnalysis_CSA(self):
@@ -924,6 +1000,8 @@ class section:
 
             # force vector:
             directionvector = p2-p1
+            # force by segments may not be consistent?!
+
             F = segment.qs * directionvector
             Fx, Fy = F[0], F[1]
             M = rx * Fy -ry * Fx
@@ -972,7 +1050,7 @@ class section:
             productlistcurrent = [(segment.qs * np.linalg.norm(np.array(segment.p2)-np.array(segment.p1))) /member.panel.h for segment in member.segments]
             productlist += productlistcurrent
 
-        integral = sum(productlist)
+        integral = math.fsum(productlist)
         self.int_qb_ds_over_t = integral
         return self.int_qb_ds_over_t
 
@@ -1058,12 +1136,12 @@ if __name__ == '__main__':
 
     Laminate = LaminateBuilder([45, -45, 0 ,90], True, True, 1)
     Member = Member(Laminate)
-    sparlocations = [80, 250]
+    sparlocations = [80, 200]
     sparmembers = [copy.deepcopy(Member) for _ in range(len(sparlocations))]
     topmembers = [copy.deepcopy(Member) for _ in range(len(sparlocations)+1)]
     botmembers = [copy.deepcopy(Member) for _ in range(len(sparlocations)+1)]
 
-    type = 'e395-il'
+    type = 'NACA2410'
     Airfoil = Airfoil(type, 1, 300, sparlocations, topmembers, botmembers, sparmembers)
     Airfoil.SolveStresses_CSA([30000, 0], [0, 100], [-70, 0])
-    print(Airfoil.FailureAnalysis_CSA())
+    # print(Airfoil.FailureAnalysis_CSA())
