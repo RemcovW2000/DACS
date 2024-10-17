@@ -25,6 +25,7 @@ class Member:
         self.panel = panel # could be either laminate or sandwich, both should work
         self.Loads = Loads # total loads, not intensity!!!
         self.h = self.panel.h
+        self.submember = None
 
         self.startcoord = [] # from leading to trailing edge for wing
         self.endcoord = [] # from leading to trailing edge for wing

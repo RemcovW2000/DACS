@@ -12,6 +12,19 @@ from scipy.integrate import simps
 from matplotlib.colors import Normalize, TwoSlopeNorm
 from scipy.linalg import lstsq
 import math
+from Toolbox.section import section
+from Toolbox.helperclasses import boom, segment
+
+
+'''
+Shear flow has to be fixed,
+
+current hypothesis is that the shear moments are not being calculated correctly!
+
+segments p1 and p2 are defined
+
+the sign of qs may not by definition coincide with the direction of the segment (from p1 to p2)
+'''
 
 class Airfoil:
     def __init__(self, airfoilname, thickness, chordlength, sparlocations, topmembers, botmembers, sparmembers):
@@ -48,7 +61,7 @@ class Airfoil:
         self.FindMemberLocations()
 
         self.segmentlength = 1 #length of segments in mm
-        self.structuralidealisation = True
+        self.structuralidealisation = False
         self.Mx = 0
         self.My = 0
         self.Sx = 0
@@ -120,8 +133,8 @@ class Airfoil:
             member.Calculate_b()
 
         for i, member in enumerate(self.sparmembers):
-            member.startcoord = [self.sparlocations[i], self.Bot_height_at(self.sparlocations[i])]
-            member.endcoord = [self.sparlocations[i], self.Top_height_at(self.sparlocations[i])]
+            member.startcoord = [self.sparlocations[i], self.Top_height_at(self.sparlocations[i])]
+            member.endcoord = [self.sparlocations[i], self.Bot_height_at(self.sparlocations[i])]
         return
 
     def Top_height_at(self, x):
@@ -536,10 +549,6 @@ class Airfoil:
         return
 
     def SectionShearCorrection(self):
-        for Section in self.sectionlist:
-            Section.PlotShearFlow()
-        # set up system of equations!
-
         # condition matrix by using differnt units! currenly units are all N and mm
         # we can arbitrarily change the unit to match the magnitude of the numbers.
 
@@ -563,21 +572,30 @@ class Airfoil:
         Mscalingfactor = 10**(-deltaorder_unit)
         radscalingfactor = 10**(order_forceintensity + deltaorder_unit)
 
+        # now time to make the array:
         array = np.zeros((len(self.sectionlist) + 1, len(self.sectionlist) + 1))
 
         for i, section in enumerate(self.sectionlist):
+            print('section number:', i)
             if i == 0:
+                print(section.deltaback)
+                # special case: first section
                 array[i, i] = section.prefactor * section.deltawhole * qscalingfactor
                 array[i, i + 1] = -section.prefactor * section.deltaback * qscalingfactor
             elif i == len(self.sectionlist)-1:
+                print(section.deltafront)
+                # special case: last section
                 array[i, i] = section.prefactor * section.deltawhole * qscalingfactor
                 array[i, i-1] = -section.prefactor * section.deltafront * qscalingfactor
             else:
+                print(section.deltafront)
+                print(section.deltaback)
+                # all other sections:
                 array[i, i] = section.prefactor * section.deltawhole * qscalingfactor
                 array[i, i + 1] = -section.prefactor * section.deltaback * qscalingfactor
                 array[i, i - 1] = -section.prefactor * section.deltafront * qscalingfactor
 
-            array[i, len(self.sectionlist)] = -1 * radscalingfactor
+            array[i, len(self.sectionlist)] = -radscalingfactor
 
         # add last equation:
         array[-1, : -1] = [2*section.A * Ascalingfactor for section in self.sectionlist]
@@ -585,9 +603,9 @@ class Airfoil:
         vector = np.zeros(len(self.sectionlist) + 1)
         for i, section in enumerate(self.sectionlist):
             vector[i] = -section.int_qb_ds_over_t * section.prefactor * qscalingfactor
-        vector[-1] = sum([section.ShearMoment * Mscalingfactor for section in self.sectionlist])
+        vector[-1] = sum([-section.ShearMoment * Mscalingfactor for section in self.sectionlist])
 
-        vector[-1] += (self.Sx*self.N0 - self.Sy * self.E0) * Mscalingfactor
+        vector[-1] += (self.Sx*self.N0 + -self.Sy * self.E0) * Mscalingfactor
         print('--------------------------------------------------------------------------')
         print('array:')
         print(array)
@@ -923,10 +941,8 @@ class Airfoil:
                 x2, y2 = segment.p2
                 dx = x2 - x1
                 dy = y2 - y1
-                print(dy)
-                print('qs:', segment.qs)
-                Fx += -segment.qs * dx
-                Fy += -segment.qs * dy
+                Fx += segment.qs * dx
+                Fy += segment.qs * dy
 
         for member in self.sparmembers:
             for segment in member.segments:
@@ -934,8 +950,8 @@ class Airfoil:
                 x2, y2 = segment.p2
                 dx = x2 - x1
                 dy = y2 - y1
-                Fx += -segment.qs * dx
-                Fy += -segment.qs * dy
+                Fx += segment.qs * dx
+                Fy += segment.qs * dy
 
         print('Fx from segments: ', Fx)
         print('Fy from segments: ', Fy)
@@ -950,198 +966,19 @@ class Airfoil:
 
         return max(memberFIs)
 
-class boom:
-    def __init__(self):
-        self.B = 0
-        self.Ex = None
-        self.Sigmax = None
-        self.location = [None, None]
-        self.qs = 0
-
-
-class segment:
-    def __init__(self):
-        self.qs = None
-        self.p1 = []
-        self.p2 = []
-class section:
-    def __init__(self, members, Sx, Sy, leadingedge, trailingedge, A):
-        self.members = members
-        self.Sx, self.Sy = Sx, Sy
-        self.leadingedge = leadingedge
-        self.trailingedge = trailingedge
-        self.A = A
-
-        self.qs0 = None
-        self.Corrected = False
-
-        # Functions to run on initialisation:
-        self.CalculateShearMoment()
-        self.CalculateDeltas()
-        self.Calculate_int_qb_ds_over_t()
-        self.CalculateG()
-        self.CalculatePrefactor()
-
-    def CalculateShearMoment(self):
-        moment = 0
-        for member in self.members:
-            moment += self.ShearMomentSegments(member.segments)
-        self.ShearMoment = moment
-        return self.ShearMoment
-
-    def ShearMomentSegments(self, segmentlist):
-        # shear moment must be zero around any point (we'll take neutral point)
-        moment = 0
-        for segment in segmentlist:
-            p1 = np.array(segment.p1)
-            p2 = np.array(segment.p2)
-            center = p1 + (p2 - p1)/2
-            rx, ry = center[0], center[1]
-
-            # force vector:
-            directionvector = p2-p1
-            # force by segments may not be consistent?!
-
-            F = segment.qs * directionvector
-            Fx, Fy = F[0], F[1]
-            M = rx * Fy -ry * Fx
-            moment += M
-
-        return moment
-
-    def CalculateDeltas(self):
-        if not self.leadingedge:
-            frontmember = self.members[-1]
-
-            difference = np.array(frontmember.endcoord) - np.array(frontmember.startcoord)
-
-            arclength = np.linalg.norm(difference)
-            self.deltafront = arclength / frontmember.panel.h
-        if not self.trailingedge:
-            backmember = self.members[1]
-            difference = np.array(backmember.endcoord) - np.array(backmember.startcoord)
-
-            arclength = np.linalg.norm(difference)
-            self.deltaback = arclength / backmember.panel.h
-
-        deltawhole = 0
-        for member in self.members:
-            # find arc length of member:
-            segments = member.segments
-            memberarclength = 0
-            for segment in segments:
-                # find the length of each segment and add to member arc length
-                p1 = np.array(segment.p1)
-                p2 = np.array(segment.p2)
-                segmentlength = abs(np.linalg.norm(p2-p1))
-                memberarclength += segmentlength
-
-            member.arclength = memberarclength
-
-            # add the delta of this member!
-            deltawhole += memberarclength/member.panel.h
-
-        self.deltawhole = deltawhole
-        return
-
-    def Calculate_int_qb_ds_over_t(self):
-        productlist = []
-        for member in self.members:
-            productlistcurrent = [(segment.qs * np.linalg.norm(np.array(segment.p2)-np.array(segment.p1))) /member.panel.h for segment in member.segments]
-            productlist += productlistcurrent
-
-        integral = math.fsum(productlist)
-        self.int_qb_ds_over_t = integral
-        return self.int_qb_ds_over_t
-
-    def CalculateG(self):
-        # find the average g modulus of the cross section somehow?
-        # TODO: find correct way to calculate G modulus
-        # average wrt the arc length? -> weird, it should have something to do with it's contribution to the torsional stifness.
-        Glist = [member.panel.Gxy * member.arclength for member in self.members]
-        Arclengthlist = [member.arclength for member in self.members]
-        self.G = sum(Glist)/sum(Arclengthlist)
-        return self.G
-
-    def CalculatePrefactor(self):
-        self.prefactor = 1/(2 * self.G * self.A)
-        return 1/(2 * self.G * self.A)
-
-    def ShearCorrection(self):
-        if not self.Corrected:
-            for member in self.members:
-                for segment in member.segments:
-                    segment.qs += self.qs0
-            self.Corrected = True
-        else:
-            print('WARNING, cross section has already been corrected! Correction not carried out.')
-        return
-
-    def PlotShearFlow(self):
-        allsegments = []
-        for member in self.members:
-            newsegments = [(segment.p1, segment.p2, segment.qs) for segment in member.segments]
-            allsegments.extend(newsegments)  # Use extend instead of append to flatten the list
-
-        # Extract values to normalize
-        values = [value for _, _, value in allsegments]
-        min_value = min(values)
-        max_value = max(values)
-        max_abs_value = max(abs(min_value), abs(max_value))
-
-        # Determine the appropriate colormap and normalization
-        if max_value <= 0:
-            # All values are negative or zero, use absolute values for intensity
-            cmap = plt.get_cmap('Blues')
-            norm = Normalize(vmin=0, vmax=abs(min_value))
-            normalized_values = [abs(value) for value in values]
-        elif min_value >= 0:
-            # All values are positive or zero
-            cmap = plt.get_cmap('Reds')
-            norm = Normalize(vmin=0, vmax=max_value)
-            normalized_values = values
-        else:
-            # Values are both positive and negative, use symmetric normalization
-            cmap = plt.get_cmap('coolwarm')
-            norm = TwoSlopeNorm(vmin=-max_abs_value, vcenter=0, vmax=max_abs_value)
-            normalized_values = values
-
-        # Plot the lines
-        fig, ax = plt.subplots()
-        for (p1, p2), value in zip(
-                [(p1, p2) for p1, p2, value in allsegments],
-                normalized_values):
-            x1, y1 = p1
-            x2, y2 = p2
-            ax.plot([x1, x2], [y1, y2], color=cmap(norm(value)), linewidth=2)
-
-        # Set equal scaling
-        ax.set_aspect('equal', adjustable='box')
-
-        # Add a color bar
-        sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
-        sm.set_array([])
-        fig.colorbar(sm, ax=ax, label='Value')
-
-        ax.set_xlabel('X-axis')
-        ax.set_ylabel('Y-axis')
-        ax.set_title('Lines with Value-Based Coloring')
-        plt.show()
-        return
-
-
 
 
 if __name__ == '__main__':
 
     Laminate = LaminateBuilder([45, -45, 0 ,90], True, True, 1)
     Member = Member(Laminate)
-    sparlocations = [80, 200]
+    sparlocations = [80, 250]
     sparmembers = [copy.deepcopy(Member) for _ in range(len(sparlocations))]
     topmembers = [copy.deepcopy(Member) for _ in range(len(sparlocations)+1)]
     botmembers = [copy.deepcopy(Member) for _ in range(len(sparlocations)+1)]
 
-    type = 'NACA2410'
+    # add local reinforcement! -> using 'submember' method:
+
+    type = 'e395-il'
     Airfoil = Airfoil(type, 1, 300, sparlocations, topmembers, botmembers, sparmembers)
-    Airfoil.SolveStresses_CSA([30000, 0], [0, 100], [-70, 0])
-    # print(Airfoil.FailureAnalysis_CSA())
+    Airfoil.SolveStresses_CSA([30000, 0], [0, 80], [-80, 0])
