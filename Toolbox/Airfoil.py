@@ -27,7 +27,8 @@ the sign of qs may not by definition coincide with the direction of the segment 
 '''
 
 class Airfoil:
-    def __init__(self, airfoilname, thickness, chordlength, sparlocations, topmembers, botmembers, sparmembers):
+    def __init__(self, airfoilname, thickness, chordlength, sparlocations, topmembers, botmembers, sparmembers,
+                 trpanel, trstart, trend, brpanel, brstart, brend):
         """
         We make the assumption that the laminate does not change within a member!
         For now we'll assume the whole structure is sandwich panel?
@@ -41,6 +42,11 @@ class Airfoil:
         - list of moments -> there are 2, around both the x and y axis
         :param shearforces:
         - list of shear forces on the profile -> there are again 2, in the direction of both axes
+
+        :param trpanel: top reinforcement panel. This is the full panel of the reinforced area.
+        :param brpanel: bottom reinforcement panel, again this is the full panel of the reinforced area
+        :params trstart, trend, brstart, brend: top- and bottom reinforcement start and en points, in mm from the leading
+        edge
         """
         self.airfoilname = airfoilname
         self.thickness = thickness
@@ -68,6 +74,9 @@ class Airfoil:
         self.Sy = 0
         self.N0 = 0
         self.E0 = 0
+
+# ------------------------------------------------------------------------------------------------------
+# Helper functions, not called in the algorithms directly, but in functions
 
     def top_bot_coordinates(self):
         # transform the coordinates as neccesary:
@@ -199,6 +208,11 @@ class Airfoil:
                         a ** 2 * (x2 ** 3 - x1 ** 3) / 3 + a * b * (x2 ** 2 - x1 ** 2) + b ** 2 * (x2 - x1)))
 
         return Ixx, Iyy, Ixy
+
+# ------------------------------------------------------------------------------------------------------
+
+# ------------------------------------------------------------------------------------------------------
+# Algorithm functions, called directly in the sequence for cross sectional analysis
 
     def Neutralpoints(self):
         # find the neutral points -> x and y coordinate of neutral axes around x and y axes:
@@ -901,7 +915,7 @@ class Airfoil:
         return R
     def SolveStresses_CSA(self, moments, shearforces, center):
         '''
-        performs sequence of
+        Algorithm that solves for stresses, can be run after initialisation
         :return:
         '''
         self.Mx, self.My = moments
@@ -910,9 +924,9 @@ class Airfoil:
         self.E0, self.N0 = center # now relative to neutral axis point/centroid
 
         # Functions for the normal stresses/deformations:
-        self.Neutralpoints()
-        self.CalculateEI()
-        self.curvatures(self.Mx, self.My)
+        self.Neutralpoints() # calculates neutral point
+        self.CalculateEI() # then calculates EI around neutral point
+        self.curvatures(self.Mx, self.My) # calculates curvatures (kx, ky)
 
         # Functions for shear stress solving
         self.SectionShearFlows(self.Sx, self.Sy)
@@ -977,8 +991,10 @@ if __name__ == '__main__':
     topmembers = [copy.deepcopy(Member) for _ in range(len(sparlocations)+1)]
     botmembers = [copy.deepcopy(Member) for _ in range(len(sparlocations)+1)]
 
-    # add local reinforcement! -> using 'submember' method:
+    reinforcementpanel = LaminateBuilder([45, -45, 0, 0, 0, 0, 90], True, True, 1)
+    reinforcement_start = 60
+    reinforcement_end = 100
 
     type = 'e395-il'
-    Airfoil = Airfoil(type, 1, 300, sparlocations, topmembers, botmembers, sparmembers)
+    Airfoil = Airfoil(type, 1, 300, sparlocations, topmembers, botmembers, sparmembers, reinforcementpanel, 60, 100, reinforcementpanel, 60, 100)
     Airfoil.SolveStresses_CSA([30000, 0], [0, 80], [-80, 0])

@@ -25,7 +25,10 @@ class Member:
         self.panel = panel # could be either laminate or sandwich, both should work
         self.Loads = Loads # total loads, not intensity!!!
         self.h = self.panel.h
-        self.submember = None
+        self.subpanel = None # this is a subpanel for adding local reinforcement.
+        self.subpanel_start = None # in mm,
+        self.subpanel_end = None
+        # this submember is just an instance of the member class
 
         self.startcoord = [] # from leading to trailing edge for wing
         self.endcoord = [] # from leading to trailing edge for wing
@@ -52,6 +55,24 @@ class Member:
 
         self.BVID_energy = 0.113*2000/25.4 # Joules per inch -> mm thickness
         # ----------------------------------------------------------------
+
+    def Ex(self, x):
+        # function should return Ex based on value for x, whether it's in the submember or not.
+        # reference point for x = 0 is the global reference point
+        if x >= self.subpanel_start and x <= self.subpanel_end:
+            Ex = self.subpanel.Ex
+        else:
+            Ex = self.panel.Ex
+        return Ex
+
+    def h(self, x):
+        # function should return h based on value for x, whether it's in the submember or not.
+        # reference point for x = 0 is the global reference point
+        if x >= self.subpanel_start and x <= self.subpanel_end:
+            h = self.subpanel.Ex
+        else:
+            h = self.panel.Ex
+        return h
 
     def CSA_FailureAnalysis(self):
         ''' Point of this function is to assign the loads of the member from the cross sectional analysis -> get loads
