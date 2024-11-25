@@ -21,3 +21,18 @@ member.subpanel_start = 0
 member.subpanel_end = 20
 
 print(member.Ex(30))
+
+import numpy as np
+
+# Example linspace and extra value
+x_values = np.linspace(0, 10, 11)  # [0, 1, 2, ..., 10]
+x = 4.5  # Value to insert
+
+# Find the index where x should be inserted
+index = np.searchsorted(x_values, x)
+
+# Insert x into the array
+new_x_values = np.insert(x_values, index, x)
+
+print("Original array:", x_values)
+print("New array:", new_x_values)

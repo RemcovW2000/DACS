@@ -24,7 +24,6 @@ class Member:
         """
         self.panel = panel # could be either laminate or sandwich, both should work
         self.Loads = Loads # total loads, not intensity!!!
-        self.h = self.panel.h
         self.subpanel = None # this is a subpanel for adding local reinforcement.
         self.subpanel_start = None # in mm,
         self.subpanel_end = None
@@ -59,8 +58,11 @@ class Member:
     def Ex(self, x):
         # function should return Ex based on value for x, whether it's in the submember or not.
         # reference point for x = 0 is the global reference point
-        if x >= self.subpanel_start and x <= self.subpanel_end:
-            Ex = self.subpanel.Ex
+        if self.subpanel:
+            if x >= self.subpanel_start and x <= self.subpanel_end:
+                Ex = self.subpanel.Ex
+            else:
+                Ex = self.panel.Ex
         else:
             Ex = self.panel.Ex
         return Ex
@@ -68,10 +70,13 @@ class Member:
     def h(self, x):
         # function should return h based on value for x, whether it's in the submember or not.
         # reference point for x = 0 is the global reference point
-        if x >= self.subpanel_start and x <= self.subpanel_end:
-            h = self.subpanel.Ex
+        if self.subpanel:
+            if x >= self.subpanel_start and x <= self.subpanel_end:
+                h = self.subpanel.Ex
+            else:
+                h = self.panel.Ex
         else:
-            h = self.panel.Ex
+            h = self.panel.h
         return h
 
     def CSA_FailureAnalysis(self):
