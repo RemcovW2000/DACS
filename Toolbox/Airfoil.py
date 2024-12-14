@@ -8,7 +8,6 @@ from Toolbox.Laminate import LaminateBuilder
 import matplotlib.pyplot as plt
 from Toolbox.DamagedRegion import *
 from Toolbox.Member import Member
-from scipy.integrate import simps
 from matplotlib.colors import Normalize, TwoSlopeNorm
 from scipy.linalg import lstsq
 import math
@@ -26,7 +25,7 @@ the sign of qs may not by definition coincide with the direction of the segment 
 '''
 
 class Airfoil:
-    def __init__(self, airfoilname, thickness, chordlength, sparlocations, topmembers, botmembers, sparmembers, trpanel, trstart, trend, brpanel, brstart, brend):
+    def __init__(self, airfoilname, thickness, chordlength, sparlocations, topmembers, botmembers, sparmembers, trpanel = None, trstart = None, trend = None, brpanel = None, brstart = None, brend = None):
         """
         We make the assumption that the laminate does not change within a member!
         For now we'll assume the whole structure is sandwich panel?
@@ -46,7 +45,7 @@ class Airfoil:
         :params trstart, trend, brstart, brend: top- and bottom reinforcement start and en points, in mm from the leading
         edge
         """
-        self.print = True
+        self.print = False
         self.airfoilname = airfoilname
         self.thickness = thickness
         self.chordlength = chordlength
@@ -85,6 +84,13 @@ class Airfoil:
         self.Sy = 0
         self.N0 = 0
         self.E0 = 0
+
+        # Initialize attributes that will be computed later
+        self.xbar = None
+        self.ybar = None
+        self.EIxx = None
+        self.EIyy = None
+        self.EIxy = None
 
 # ------------------------------------------------------------------------------------------------------
 # Helper functions, not called in the algorithms directly, but in functions
@@ -230,6 +236,8 @@ class Airfoil:
         This function makes subpanels and assigns them to the correct members:
         :return:
         """
+
+        # -> check if there is even a reinforcement
         if self.trpanel:
             # this means there is a top reinforcement!
             for member in self.topmembers:
@@ -303,6 +311,7 @@ class Airfoil:
         EAtot = 0
         for member in self.topmembers:
             npoints = 10  # TODO: placeholder!
+
             # in the topmembers list, we know the start and end coordinates:
             xlist = np.linspace(member.startcoord[0], member.endcoord[0], npoints)
             for i, x in enumerate(xlist):
@@ -331,6 +340,7 @@ class Airfoil:
 
         for member in self.botmembers:
             npoints = 10  # TODO: placeholder!
+
             # in the topmembers list, we know the start and end coordinates:
             xlist = np.linspace(member.startcoord[0], member.endcoord[0], npoints)
             for i, x in enumerate(xlist):
@@ -381,33 +391,69 @@ class Airfoil:
         return xbar, ybar
 
     def plotairfoil(self):
+
+        # Coloring inside of the airfoil:
         xlist = np.linspace(0.1, self.chordlength, 100)
         top = [self.Top_height_at(x) for x in xlist]
         bot = [self.Bot_height_at(x) for x in xlist]
 
 
-        # Plotting
         plt.figure(figsize=(10, 6))
-        plt.plot(xlist, top, label='Top Height')
-        plt.plot(xlist, bot, label='Bottom Height')
         plt.fill_between(np.linspace(0, self.chordlength, len(xlist)), top, bot,
                          color='lightblue', alpha=0.5)
-        for spar in self.sparlocations:
-            bot_at_rib = self.Bot_height_at(spar)
-            top_at_rib = self.Top_height_at(spar)
-            plt.plot([spar, spar], [bot_at_rib, top_at_rib], color='green', linewidth = 3, label='spar' if spar == self.sparlocations[0] else "")
+        def plotmembers(memberlist, color, label=None):
+            for idx, member in enumerate(memberlist):
+                xlist = [boom.location[0] + self.xbar for boom in member.booms]
+                ylist = [boom.location[1] + self.ybar for boom in member.booms]
 
-        plt.axhline(y=self.ybar, linestyle='--')
-        plt.axvline(x=self.xbar, linestyle='--')
+                # Place the text near the middle of each member
+                mid_index = len(member.booms) // 2
+                xlabel = xlist[mid_index] - 10
+                ylabel = ylist[mid_index] + 5
+
+                stacking_text = ', '.join(map(str, member.panel.stackingsequence))  # Converts list to a readable string
+                plt.text(xlabel, ylabel, stacking_text, color=color, fontsize=5)
+                plt.text(xlabel -5, ylabel, idx, color='black', fontsize=8)
+
+                # Only set the label for the first member in the list
+                plt.plot(xlist, ylist, label=label if idx == 0 else None, color=color)
+            return
+
+        # Plotting top members:
+        plotmembers(self.topmembers, 'orange', label='Top Members')
+
+        # Plotting bottom members:
+        plotmembers(self.botmembers, 'blue', label='Bottom Members')
+
+        # Plotting spar members:
+        plotmembers(self.sparmembers, 'green', label='Spar Members')
+
+        # plot reinforcement:
+        # reinforcement is the same everywhere atleast on top/on bottom
+        trxlist = np.linspace(self.trstart, self.trend, 20)
+        trylist = [self.Top_height_at(x) for x in trxlist]
+
+        brxlist = np.linspace(self.brstart, self.brend, 20)
+        brylist = [self.Bot_height_at(x) for x in brxlist]
+
+        plt.plot(trxlist, trylist, label = 'Top reinforcement', color = 'black', linewidth = 2)
+        plt.plot(brxlist, brylist, label='Bottom reinforcement', color='black', linewidth = 2)
+
+
+        plt.axhline(y=self.ybar, linestyle='--', label = 'neutral bending axis')
+        plt.axvline(x=self.xbar, linestyle='--', label = 'neutral bending axis')
         plt.axis('equal')
         plt.xlabel('X values')
         plt.ylabel('Heights')
         plt.title('Top and Bottom Heights vs. X values')
         plt.legend()
         plt.grid(True)
-        plt.show()
+        return plt
 
     def CalculateEI(self):
+        if self.xbar is None or self.ybar is None:
+            raise ValueError(
+                "Neutral points (xbar, ybar) must be calculated before calculating EI. Call Neutralpoints() first.")
         # for bot and top members we have a function:
         EIxxt, EIyyt, EIxyt = self.EI(self.topmembers, 100, 'top')
         EIxxb, EIyyb, EIxyb = self.EI(self.botmembers, 100, 'bot')
@@ -485,28 +531,48 @@ class Airfoil:
         e = -kx*(y) + ky*(x)
         return e
 
+    def CalculateBoomAreas(self, p1, p2, member, kx, ky, x = None):
+        # p1 and p2 are locations of booms with respect to neutral axes!
+        # having 2 points, we obtain 2 strains and stresses
+        e1 = self.AxialStrain(kx, ky, p1[0], p1[1])
+        e2 = self.AxialStrain(kx, ky, p2[0], p2[1])
+
+        # now find the stresses:
+        if x is None:
+            Ex = member.panel.Ex
+        else:
+            Ex = member.Ex(x)
+        s1 = e1 * Ex
+        s2 = e2 * Ex
+
+        # based on this we can calculate areas for booms:
+        b = np.sqrt((p2[0] - p1[0]) ** 2 + (p2[1] - p1[1]) ** 2)
+        if x is None:
+            td = member.panel.h
+        else:
+            td = member.h(x)
+        B1 = (td * b / 6) * (2 + s2 / s1)
+        B2 = (td * b / 6) * (2 + s1 / s2)
+
+        # Calculate area ratio
+        area_ratio = (B1 + B2) / (b * td)
+
+        # Check bounds for the area ratio
+        tolerance = 0.05  # Allowable deviation (5%)
+        p1print = [p1[0]+self.xbar, p1[1] + self.ybar]
+        p2print = [p2[0] + self.xbar, p2[1] + self.ybar]
+        if not (1 - tolerance <= area_ratio <= 1 + tolerance):
+            print(
+                f"Warning: Area ratio out of bounds: {area_ratio:.3f} at point {p1print}, {p2print}, ybar = {self.ybar:.3f} "
+                f"with member start {member.startcoord} and end {member.endcoord}. e1 = {e1}, e2 = {e2}"
+            )
+        return B1, B2, s1, s2
+
     def GenerateBooms(self, memberlist, side, Mx, My):
         '''
         Generate a bunch of skin segments with a thickness, start and end point, as well as sigma1, sigma2 and thickness
         '''
         kx, ky = self.curvatures(Mx, My)
-        def CalculateBoomAreas(p1, p2, member, x):
-            # p1 and p2 are locations of booms with respect to neutral axes!
-            # having 2 points, we obtain 2 strains and stresses
-            e1 = self.AxialStrain(kx, ky, p1[0], p1[1])
-            e2 = self.AxialStrain(kx, ky, p2[0], p2[1])
-
-            # now find the stresses:
-            Ex = member.Ex(x)
-            s1 = e1 * Ex
-            s2 = e2 * Ex
-
-            # based on this we can calculate areas for booms:
-            b = np.sqrt((p2[0] - p1[0]) ** 2 + (p2[1] - p1[1]) ** 2)
-            td = member.h(x)
-            B1 = (td * b / 6) * (2 + s2 / s1)
-            B2 = (td * b / 6) * (2 + s1 / s2)
-            return B1, B2, s1, s2
 
         # looping through member lists and using previous function:
         for member in memberlist if side == 'top' else reversed(memberlist):
@@ -549,7 +615,6 @@ class Airfoil:
 
                     indexend = np.searchsorted(xlist[::-1], end)
                     xlist = np.insert(xlist, len(xlist) - indexend, end)
-                print(side, xlist)
             else:
                 pass
 
@@ -569,7 +634,7 @@ class Airfoil:
 
 
                     # feed appropriate x value to boom areas function:
-                    B1, B2, s1, s2 = CalculateBoomAreas(p1, p2, member, x)
+                    B1, B2, s1, s2 = self.CalculateBoomAreas(p1, p2, member, kx, ky, x)
                     boomlist[i].B += B1
                     boomlist[i].Ex = member.Ex(x)
                     boomlist[i].location = p1
@@ -579,28 +644,22 @@ class Airfoil:
                     boomlist[i + 1].location = p2
                     boomlist[i + 1].Sigmax = s2
             member.booms = boomlist
+            # TODO: write test that tests the number of booms and segments created
         return
 
     def GenerateSparBooms(self):
+        '''
+        Function generates booms for the spar members in the memberlists.
+        :return:
+        '''
         Mx = self.Mx
         My = self.My
+
+        # Error check for moments, must be non zero
+        if Mx == 0 and My == 0:
+            raise ValueError("Moments Mx and My cannot both be zero. Analysis requires at least one non-zero moment.")
+
         kx, ky = self.curvatures(Mx, My)
-        def CalculateBoomAreas(p1, p2, member):
-            # having 2 points, we obtain 2 strains and stresses
-            e1 = self.AxialStrain(kx, ky, p1[0], p1[1])
-            e2 = self.AxialStrain(kx, ky, p2[0], p2[1])
-
-            # now find the stresses:
-            Ex = member.panel.Ex # spars dont have reinforcement, no need to calculate member.Ex(x)
-            s1 = e1 * Ex
-            s2 = e2 * Ex
-
-            # based on this we can calculate areas for booms:
-            b = np.sqrt((p2[0] - p1[0]) ** 2 + (p2[1] - p1[1]) ** 2)
-            td = member.panel.h
-            B1 = (td * b / 6) * (2 + s2 / s1)
-            B2 = (td * b / 6) * (2 + s1 / s2)
-            return B1, B2, s1, s2
 
         for i, member in enumerate(self.sparmembers):
             # apply the boom areas function to each segment in the member:
@@ -616,7 +675,7 @@ class Airfoil:
             boomplaceholder = boom()
             boomlist = [copy.deepcopy(boomplaceholder) for _ in ylocations]
             for i in range(len(ylocations)):
-                # skip the last loop:
+                # skip the last iteration in loop:
                 if i == len(ylocations) - 1:
                     break
                 # then proceed:
@@ -625,8 +684,7 @@ class Airfoil:
                 p2 = [x - self.xbar, ylocations[i + 1] - self.ybar]
 
                 # Then find the boom areas and normal stresses:
-                B1, B2, s1, s2 = CalculateBoomAreas(p1, p2, member)
-
+                B1, B2, s1, s2 = self.CalculateBoomAreas(p1, p2, member, kx, ky)
                 # Now add these to the boom objects in the list
                 boomlist[i].B += B1
                 boomlist[i].Ex = member.panel.Ex
@@ -1150,6 +1208,7 @@ if __name__ == '__main__':
     type = 'NACA2410'
     Airfoil = Airfoil(type, 1, 300, sparlocations, topmembers, botmembers, sparmembers, reinforcementpaneltop, 60, 100, reinforcementpanelbot, 60, 100)
     Airfoil.SolveStresses_CSA([30000, 0], [0, 80], [300/4, 0])
+    Airfoil.FailureAnalysis_CSA()
 
     # Assuming 'topshears' and 'xlist' are already defined from the loop
     topshears = []

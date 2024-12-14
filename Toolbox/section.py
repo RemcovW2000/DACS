@@ -23,16 +23,11 @@ class section:
         self.CalculatePrefactor()
 
     def CalculateShearMoment(self):
-        print('----------------------------------------------')
         moment = 0
         for i, member in enumerate(self.members):
             membermoment = self.ShearMomentSegments(member.segments)
-            print('moment in member ', i, ' : ', membermoment)
             moment += membermoment
         self.ShearMoment = moment
-        print('----------------------------------------------')
-        print('moment in section: ', moment)
-        print('----------------------------------------------')
         return self.ShearMoment
 
     def ShearMomentSegments(self, segmentlist):
@@ -48,7 +43,6 @@ class section:
             directionvector = p2-p1
             # force by segments may not be consistent?!
             F = segment.qs * directionvector
-            # print('force vector: ', F)
             Fx, Fy = F[0], F[1]
             M = ry * Fx - rx * Fy
             moment += M

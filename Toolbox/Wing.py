@@ -4,10 +4,10 @@ import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d
 from Toolbox.Airfoil import Airfoil
 from Toolbox.Member import Member
-from Data.Panels import Sandwiches
+from Data.Panels import Sandwiches, Laminates
 
 class Wing:
-    def __init__(self, liftdistribution, coorddistribution, LElocations, thicknessdistribution, halfspan, ribcoordinates, sparcoordinates):
+    def __init__(self, liftdistribution, coorddistribution, LElocations, thicknessdistribution, halfspan, ribcoordinates, sparcoordinates, trend = None, brend = None):
         """
         :param airfoilcoords: list
         - list containing 2 lists
@@ -50,6 +50,16 @@ class Wing:
         self.toppanels = []
         self.botpanels = []
         self.sparpanels = []
+
+        self.trcoordinates = []
+        self.brcoordinates = []
+        self.trwidth = None
+        self.brwidth = None
+
+        # TODO: put in some sort of global top- and bottom reinforcement panel, could be in same format as normal panels
+        self.trpanels = []
+        self.brpanels = []
+        # TODO: put in a global way to find the width of the reinforcement
 
     def lift_at(self, y):
         """
@@ -152,6 +162,118 @@ class Wing:
         moment_interp = interp1d(y, self.moment_distribution_internal, kind='linear')
         return moment_interp(location)
 
+    def reinforcementpaneltop_at(self, location):
+        # for a given location y, there must be members defined ->
+        # Check if the location is not greater than the largest value ->
+        endpoint = self.trpanels[1]
+
+        # if the location is past the endpoint for the reinforcement then return None:
+        if location > endpoint:
+            return None
+
+        # now use the found index to find the panel:
+        panel = self.trpanels[0]
+
+        # finally make the panel:
+        trpanel = Member(panel)
+        return trpanel
+
+    def reinforcementpanelbot_at(self, location):
+        # for a given location y, there must be members defined ->
+        # Check if the location is not greater than the largest value ->
+        endpoint = self.brpanels[1]
+
+        # if the location is past the endpoint for the reinforcement then return None:
+        if location > endpoint:
+            return None
+
+        # now use the found index to find the panel:
+        panel = self.brpanels[0]
+
+        # finally make the panel:
+        brpanel = Member(panel)
+        return brpanel
+
+    def trstartend_at(self, location):
+        """
+        Returns the x coordinate of the top reinforcement at a given y location along the span.
+        :param location: float
+        :return: list of floats
+        """
+        tr_x = []
+        tr_y = []
+
+        for coord in self.trcoordinates:
+            tr_x.append(coord[0])
+            tr_y.append(coord[1])
+        print(tr_x, tr_y)
+        tr_interp = interp1d(tr_y, tr_x, kind='linear', fill_value="extrapolate")
+        return tr_interp(location) - self.trwidth/2, tr_interp(location) + self.trwidth/2
+
+    def brstartend_at(self, location):
+        """
+        Returns the x coordinate of the top reinforcement at a given y location along the span.
+        :param location: float
+        :return: list of floats
+        """
+        br_x = []
+        br_y = []
+
+        for coord in self.brcoordinates:
+            br_x.append(coord[0])
+            br_y.append(coord[1])
+        tr_interp = interp1d(br_y, br_x, kind='linear', fill_value="extrapolate")
+        return tr_interp(location) - self.brwidth/2, tr_interp(location) + self.brwidth/2
+
+    def GenerateAirfoils(self):
+        """
+        This function generates the airfoil objects and records their coordinates.
+
+        It assigns the members and reinforcement correctly
+        :return:
+        """
+        analysislocations = np.linspace(0, self.halfspan-200, 10)
+
+        airfoils = []
+        for y in analysislocations:
+            topmembers = self.topmembers_at(y)
+            botmembers = self.botmembers_at(y)
+            sparmembers = self.sparmembers_at(y)
+            reinforcementpaneltop = self.reinforcementpaneltop_at(y)
+            reinforcementpanelbot = self.reinforcementpanelbot_at(y)
+            sparlocations = self.spar_positions_at(y)
+
+            trstart, trend = self.trstartend_at(y)
+            brstart, brend = self.brstartend_at(y)
+            type = 'NACA2410'
+            # make the option:
+            airfoil = Airfoil(type, 1, 300, sparlocations, topmembers, botmembers, sparmembers, reinforcementpaneltop, trstart,
+                              trend, reinforcementpanelbot, brstart, brend)
+            airfoils.append(airfoil)
+
+        self.airfoils = airfoils
+        self.airfoilys = analysislocations
+        return
+
+    def findcurvatures(self):
+        for i, airfoil in enumerate(self.airfoils):
+            y = self.airfoilys[i]
+            airfoil.curvatures(y)
+        return
+
+    def SolveStresses_CSA(self):
+        for i, airfoil in enumerate(self.airfoils):
+            y = self.airfoilys[i]
+            mx = self.moment_at(y)
+            my = 0
+            sx = 0
+            sy = self.shear_at(y)
+            moments = [mx, my]
+            shears = [sx, sy]
+            center = [self.chord_at(y)/4, 0] # place it at quarter chord
+            airfoil.SolveStresses_CSA(moments, shears, center)
+        return
+
     def panels_at(self, objects_list, coordinate):
         for panel, end_coordinate in objects_list:
             if coordinate <= end_coordinate:
@@ -192,7 +314,7 @@ class Wing:
         topmembers = self.topmembers_at(y)
         botmembers = self.botmembers_at(y)
         sparmembers = self.sparmembers_at(y)
-        airfoil = Airfoil('NACA2410', thickness, chordlength, spars, topmembers, botmembers, sparmembers)
+        airfoil = Airfoil('NACA2410', thickness, chordlength, spars, topmembers, botmembers, sparmembers, )
         airfoil.Neutralpoints()
         airfoil.CalculateEI()
         kx, ky = airfoil.curvatures(moment, 0)
@@ -223,7 +345,7 @@ class Wing:
         Check failure at a certain nr of points. Especially right behind the ribs
         :return:
         '''
-        # TODO: remove -300
+        # TODO: remove -300, its a random buffer so that we dont check too close to the tip which lead to problems, find a better solution
         ycoordinates = np.linspace(0, self.halfspan-300, num)
         RIBFIs = [self.FailureAnalysis_at(coordinate) for coordinate in ycoordinates]
         print('RIBFIs calculated')
@@ -371,6 +493,9 @@ sparcoordinates = [[[300/4, 0], [15 + 250/4, 1000], [75, 1500]],
                    [[200, 0], [185, 1000], [75, 1500]]]  # Example spar coordinates
 ribcoordinates = [0, 600, 1200, 1400]
 
+reinforcementcoordinates = [[300/4, 0], [15 + 250/4, 1000], [75, 1500]] # list containing reinforcement coordinates: [[x, y], [x, y] ... ]
+
+
 
 
 
@@ -378,6 +503,14 @@ wing = Wing(liftdistribution, chord_lengths, leading_edge_locations, thicknessdi
 
 wing.toppanels = [[Sandwiches['PanelWingRoot'], 500], [Sandwiches['PanelWingRoot'], 1600]]
 wing.botpanels = [[Sandwiches['PanelWingRoot'], 500], [Sandwiches['PanelWingRoot'], 1600]]
+wing.trpanels = [Laminates['Reinforcement'], 700]
+wing.brpanels = [Laminates['Reinforcement'], 700]
+wing.trwidth = 50
+wing.brwidth = 50
+wing.trcoordinates = reinforcementcoordinates
+wing.brcoordinates = reinforcementcoordinates
+
+
 wing.sparpanels = Sandwiches['SparPanels']
 moment_distribution = wing.internal_moment()
 shear_distribution = wing.shear_force()
@@ -388,13 +521,15 @@ moment_at_location = wing.moment_at(location)
 spar_positions = wing.spar_positions_at(location)
 LE_at_location = wing.LE_at(location)
 
-print("Shear Force at location", location, ":", shear_at_location)
-print("Moment at location", location, ":", moment_at_location)
-print("Spar positions at location", location, ":", spar_positions)
-print("Leading Edge at location", location, ":", LE_at_location)
-print('airfoil curvature:', location, ":", wing.curvatures_at(location))
+wing.GenerateAirfoils()
+wing.SolveStresses_CSA()
+# print("Shear Force at location", location, ":", shear_at_location)
+# print("Moment at location", location, ":", moment_at_location)
+# print("Spar positions at location", location, ":", spar_positions)
+# print("Leading Edge at location", location, ":", LE_at_location)
+# # print('airfoil curvature:', location, ":", wing.curvatures_at(location))
 
 # Plot the wing planform
 wing.plot_wing_planform()
-wing.plot_deflection(10)
-print(wing.FIplot(10))
+# wing.plot_deflection(10)
+# print(wing.FIplot(10))
