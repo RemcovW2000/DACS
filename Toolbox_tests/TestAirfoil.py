@@ -48,13 +48,52 @@ class TestAirfoil(unittest.TestCase):
         self.assertEqual(len(self.airfoil.topmembers), 3)  # len(sparlocations) + 1
         self.assertEqual(len(self.airfoil.botmembers), 3)  # len(sparlocations) + 1
 
+    def test_segment_I(self):
+        t = 1
+        P1_v = [0, 0]
+        P2_v = [0, 1]
+
+        P1_h = [0, 0]
+        P2_h = [1, 0]
+
+        P1_d = [0, 0]
+        P2_d = [1, 1]
+
+        P1_vneg = [0, 0]
+        P2_vneg = [0, -1]
+
+        P1_hneg = [0, 0]
+        P2_hneg = [-1, 0]
+
+        P1_dneg = [0, 0]
+        P2_dneg = [-1, -1]
+
+        Iv = self.airfoil.segment_I(t, P1_v, P2_v)
+        Ih = self.airfoil.segment_I(t, P1_h, P2_h)
+        Id = self.airfoil.segment_I(t, P1_d, P2_d)
+
+        Ivneg = self.airfoil.segment_I(t, P1_vneg, P2_vneg)
+        Ihneg = self.airfoil.segment_I(t, P1_hneg, P2_hneg)
+        Idneg = self.airfoil.segment_I(t, P1_dneg, P2_dneg)
+
+        self.assertEqual(Iv[2], -Ivneg[2])
+        self.assertEqual(Ih[2], -Ihneg[2])
+        self.assertEqual(Id[2], -Idneg[2])
+
+        self.assertTrue(len(Iv) == 3)
+        self.assertTrue(len(Ih) == 3)
+        self.assertTrue(len(Id) == 3)
+
+        self.assertTrue(Iv[0] > 0 and Iv[1] > 0)
+        self.assertTrue(Ih[0] > 0 and Ih[1] > 0)
+        self.assertTrue(Id[0] > 0 and Id[1] > 0)
+
     def test_top_botmemberlist_order(self):
         """Test the order of the top and bot member lists from leading to trailing edge."""
 
         # Extract the x-coordinates of the start points for topmembers
         top_start_x_coords = [member.startcoord[0] for member in self.airfoil.topmembers]
         # Ensure the x-coordinates are in ascending order
-        print('top_start_x_coords',top_start_x_coords)
         self.assertTrue(
             all(x1 <= x2 for x1, x2 in zip(top_start_x_coords, top_start_x_coords[1:])),
             f"Top members are not ordered correctly: {top_start_x_coords}"
@@ -127,9 +166,7 @@ class TestAirfoil(unittest.TestCase):
         self.assertIsInstance(ky, float, "ky should be a float.")
 
     def test_section_shear_flow(self):
-        """Test shear flow calculations."""
-
-        """Test curvature calculations."""
+        """Test shear flow calculations"""
         self.airfoil.Neutralpoints()
 
         # Now calculate bending stiffness
@@ -139,7 +176,80 @@ class TestAirfoil(unittest.TestCase):
         self.airfoil.My = 200
         self.airfoil.SectionShearFlows(100, 50)  # Example shear force values
         self.assertTrue(hasattr(self.airfoil, 'sectionlist'), "Airfoil should have a sectionlist attribute after shear flow calculation.")
-        self.assertGreater(len(self.airfoil.sectionlist), 0, "Section list should not be empty.")
+        self.assertTrue(len(self.airfoil.sectionlist) == len(self.airfoil.sparlocations) + 1, "Section list should be size of sparlocations + 1.")
+
+    def test_nr_of_booms(self):
+        self.airfoil.Neutralpoints()
+
+        # Now calculate bending stiffness
+        self.airfoil.CalculateEI()
+
+        self.airfoil.Mx = 1000
+        self.airfoil.My = 200
+        self.airfoil.SectionShearFlows(100, 50)
+
+    def test_no_shared_subobjects(self):
+        """
+        Test to ensure no objects share sub-objects (deep copy verification).
+        """
+
+        self.airfoil.Mx = 1000
+        self.airfoil.My = 200
+        self.Sx, self.Sy = 100, 50
+
+        # TODO: fix these dimensions so they are in the global (wing) FOR?
+        self.E0, self.N0 = 0, 0 # relative to the local airfoil FOR
+
+        # Functions for the normal stresses/deformations:
+        self.airfoil.Neutralpoints() # calculates neutral point
+        self.airfoil.CalculateEI() # then calculates EI around neutral point
+
+        # Functions for shear stress solving
+        self.airfoil.SectionShearFlows(self.Sx, self.Sy)
+        self.airfoil.SectionShearCorrection()
+        self.airfoil.ShearSuperPosition()
+        # we want to check the total shear force exerted by the section:
+        self.airfoil.ShearforceAnalysis()
+        # Collect all sub-objects into a list for comparison
+        subobjects = []
+
+        # Traverse through the hierarchy
+        for member in self.airfoil.topmembers + self.airfoil.botmembers + self.airfoil.sparmembers:
+            subobjects.append(member)
+            subobjects.extend(member.booms)  # Add booms to the list if present
+            subobjects.extend(member.segments)
+
+        # Ensure no two sub-objects have the same ID
+        ids = [id(obj) for obj in subobjects]
+        self.assertEqual(len(ids), len(set(ids)), "Sub-objects are shared between parent objects!")
+
+    def test_section_order(self):
+        self.airfoil.Mx = 1000
+        self.airfoil.My = 200
+        self.Sx, self.Sy = 100, 50
+
+        self.E0, self.N0 = 0, 0  # relative to the local airfoil FOR
+
+        # Functions for the normal stresses/deformations:
+        self.airfoil.Neutralpoints()  # calculates neutral point
+        self.airfoil.CalculateEI()  # then calculates EI around neutral point
+
+        # Functions for shear stress solving
+        self.airfoil.SectionShearFlows(self.Sx, self.Sy)
+        self.airfoil.SectionShearCorrection()
+        self.airfoil.ShearSuperPosition()
+        # we want to check the total shear force exerted by the section:
+        self.airfoil.ShearforceAnalysis()
+
+        xstarts = []
+        for i, section in enumerate(self.airfoil.sectionlist):
+            x_start_firstmember = self.airfoil.sectionlist[i].members[0].startcoord[0]
+            xstarts.append(x_start_firstmember)
+
+        # order of start points of first members should increase:
+        is_ascending = all(xstarts[i] <= xstarts[i + 1] for i in range(len(xstarts) - 1))
+        self.assertTrue(is_ascending)
+
 
 if __name__ == "__main__":
     unittest.main()

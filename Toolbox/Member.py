@@ -24,9 +24,9 @@ class Member:
         """
         self.panel = panel # could be either laminate or sandwich, both should work
         self.Loads = Loads # total loads, not intensity!!!
-        self.subpanel = None # this is a subpanel for adding local reinforcement.
-        self.subpanel_start = None # in mm,
-        self.subpanel_end = None
+        self.submember = None # this is a submember for adding local reinforcement.
+        self.submember_start = None # in mm,
+        self.submember_end = None
         # this submember is just an instance of the member class
 
         self.startcoord = [] # from leading to trailing edge for wing
@@ -58,9 +58,9 @@ class Member:
     def Ex(self, x):
         # function should return Ex based on value for x, whether it's in the submember or not.
         # reference point for x = 0 is the global reference point
-        if self.subpanel:
-            if x >= self.subpanel_start and x <= self.subpanel_end:
-                Ex = self.subpanel.Ex
+        if self.submember:
+            if x >= self.submember_start and x <= self.submember_end:
+                Ex = self.submember.panel.Ex
             else:
                 Ex = self.panel.Ex
         else:
@@ -69,12 +69,13 @@ class Member:
 
     def h(self, x):
         # function should return h based on value for x, whether it's in the submember or not.
+        # submember is a member type object!
         # reference point for x = 0 is the global reference point
-        if self.subpanel:
-            if x >= self.subpanel_start and x <= self.subpanel_end:
-                h = self.subpanel.Ex
+        if self.submember:
+            if x >= self.submember_start and x <= self.submember_end:
+                h = self.submember.panel.h
             else:
-                h = self.panel.Ex
+                h = self.panel.h
         else:
             h = self.panel.h
         return h
@@ -772,14 +773,3 @@ class Member:
         plt.title(f'Integrands as a function of r at z={z}')
         plt.legend()
         plt.show()
-
-
-
-
-
-
-
-
-
-
-

@@ -1,7 +1,9 @@
 import copy
 
 import numpy as np
-
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from Data.Airfoils import airfoilcoords
 from scipy.interpolate import interp1d
 from Toolbox.Laminate import LaminateBuilder
@@ -46,6 +48,7 @@ class Airfoil:
         edge
         """
         self.print = False
+        self.plot = False
         self.airfoilname = airfoilname
         self.thickness = thickness
         self.chordlength = chordlength
@@ -62,9 +65,6 @@ class Airfoil:
         self.sparlocations = sparlocations
         self.sparmembers = sparmembers
 
-        # find the member locations upon initialisation: startcoord, endcoord, etc:
-        self.FindMemberLocations()
-
         # reinforcement data:
         self.trpanel = trpanel
         self.trstart = trstart
@@ -73,17 +73,14 @@ class Airfoil:
         self.brstart = brstart
         self.brend = brend
 
-        # assign the subpanels to the members which have reinforcement:
-        self.assignsubpanels()
-
         self.segmentlength = 1 #length of segments in mm
         self.structuralidealisation = False
         self.Mx = 0
         self.My = 0
         self.Sx = 0
         self.Sy = 0
-        self.N0 = 0
-        self.E0 = 0
+        self.yshear = 0
+        self.xshear = 0
 
         # Initialize attributes that will be computed later
         self.xbar = None
@@ -91,6 +88,11 @@ class Airfoil:
         self.EIxx = None
         self.EIyy = None
         self.EIxy = None
+
+        # find the member locations upon initialisation: startcoord, endcoord, etc:
+        self.FindMemberLocations()
+        # assign the submembers to the members which have reinforcement:
+        self.assignsubmembers()
 
 # ------------------------------------------------------------------------------------------------------
 # Helper functions, not called in the algorithms directly, but in functions
@@ -231,60 +233,62 @@ class Airfoil:
 # ------------------------------------------------------------------------------------------------------
 # Algorithm functions, called directly in the sequence for cross sectional analysis
 
-    def assignsubpanels(self):
+    def assignsubmembers(self):
         """
-        This function makes subpanels and assigns them to the correct members:
+        This function makes submembers and assigns them to the correct members:
         :return:
         """
 
         # -> check if there is even a reinforcement
         if self.trpanel:
+            # print(self.trpanel)
+            # print(self.trstart)
             # this means there is a top reinforcement!
             for member in self.topmembers:
-                # for each member, see if the member contains a subpanel:
+                # for each member, see if the member contains a submember:
                 # if the member contains reinforcement:
                 if member.startcoord[0] < self.trstart < member.endcoord[0]:
                     # this means the start is in the member, is the end in?
-                    member.subpanel = self.trpanel
+                    member.submember = self.trpanel
                     if member.endcoord[0] > self.trend:
-                        # this means the end is also in the member, assign member subpanel:
-                        member.subpanel_start = self.trstart
-                        member.subpanel_end = self.trend
+                        # this means the end is also in the member, assign member submember:
+                        member.submember_start = self.trstart
+                        member.submember_end = self.trend
                     else:
                         # end is not in member:
-                        member.subpanel_start = self.trstart
-                        member.subpanel_end = member.endcoord[0]
+                        member.submember_start = self.trstart
+                        member.submember_end = member.endcoord[0]
 
                 # check if end is in member:
                 elif member.startcoord[0] < self.trend < member.endcoord[0]:
                     # this means the end is in but the start is not
-                    member.subpanel = self.trpanel
-                    member.subpanel_start = member.startcoord[0]
-                    member.subpanel_end = self.trend
+                    member.submember = self.trpanel
+                    member.submember_start = member.startcoord[0]
+                    member.submember_end = self.trend
 
         if self.brpanel:
             # this means there is a top reinforcement!
             for member in self.botmembers:
-                # for each member, see if the member contains a subpanel:
+                # for each member, see if the member contains a submember:
                 # if the member contains reinforcement:
                 if member.startcoord[0] < self.brstart < member.endcoord[0]:
                     # this means the start is in the member, is the end in?
-                    member.subpanel = self.brpanel
+                    member.submember = self.brpanel
                     if member.endcoord[0] > self.brend:
-                        # this means the end is also in the member, assign member subpanel:
-                        member.subpanel_start = self.brstart
-                        member.subpanel_end = self.brend
+                        # this means the end is also in the member, assign member submember:
+                        member.submember_start = self.brstart
+                        member.submember_end = self.brend
                     else:
                         # end is not in member:
-                        member.subpanel_start = self.brstart
-                        member.subpanel_end = member.endcoord[0]
+                        member.submember_start = self.brstart
+                        member.submember_end = member.endcoord[0]
 
                 # check if end is in member:
                 elif member.startcoord[0] < self.brend < member.endcoord[0]:
                     # this means the end is in but the start is not
-                    member.subpanel = self.brpanel
-                    member.subpanel_start = member.startcoord[0]
-                    member.subpanel_end = self.brend
+                    member.submember = self.brpanel
+                    member.submember_start = member.startcoord[0]
+                    member.submember_end = self.brend
         if self.print:
             print('--------------------------------------------------------------------------------')
             print('Member reinforcements:')
@@ -293,14 +297,14 @@ class Airfoil:
                 print('start and end coordinates of member:')
                 print(member.startcoord, member.endcoord)
                 print('start and end x coordinates of reinforcement:')
-                print(member.subpanel_start, member.subpanel_end)
+                print(member.submember_start, member.submember_end)
                 print('--------------------------------------------------------------------------------')
             print('Botmembers:')
             for member in self.botmembers:
                 print('start and end coordinates of member:')
                 print(member.startcoord, member.endcoord)
                 print('start and end x coordinates of reinforcement:')
-                print(member.subpanel_start, member.subpanel_end)
+                print(member.submember_start, member.submember_end)
                 print('--------------------------------------------------------------------------------')
         return
 
@@ -429,16 +433,15 @@ class Airfoil:
         plotmembers(self.sparmembers, 'green', label='Spar Members')
 
         # plot reinforcement:
-        # reinforcement is the same everywhere atleast on top/on bottom
-        trxlist = np.linspace(self.trstart, self.trend, 20)
-        trylist = [self.Top_height_at(x) for x in trxlist]
+        if self.trpanel:
+            trxlist = np.linspace(self.trstart, self.trend, 20)
+            trylist = [self.Top_height_at(x) for x in trxlist]
+            plt.plot(trxlist, trylist, label='Top reinforcement', color='black', linewidth=2)
 
-        brxlist = np.linspace(self.brstart, self.brend, 20)
-        brylist = [self.Bot_height_at(x) for x in brxlist]
-
-        plt.plot(trxlist, trylist, label = 'Top reinforcement', color = 'black', linewidth = 2)
-        plt.plot(brxlist, brylist, label='Bottom reinforcement', color='black', linewidth = 2)
-
+        if self.brpanel:
+            brxlist = np.linspace(self.brstart, self.brend, 20)
+            brylist = [self.Bot_height_at(x) for x in brxlist]
+            plt.plot(brxlist, brylist, label='Bottom reinforcement', color='black', linewidth=2)
 
         plt.axhline(y=self.ybar, linestyle='--', label = 'neutral bending axis')
         plt.axvline(x=self.xbar, linestyle='--', label = 'neutral bending axis')
@@ -482,11 +485,11 @@ class Airfoil:
             # in the topmembers list, we know the start and end coordinates:
             xlist = np.linspace(member.startcoord[0], member.endcoord[0], npoints)
 
-            # now we need to find whether the member has a subpanel:
-            if member.subpanel:
-                # if so, we need the start and end points of the subpanel:
+            # now we need to find whether the member has a submember:
+            if member.submember:
+                # if so, we need the start and end points of the submember:
 
-                start = member.subpanel_start + 1e-3  # add small value to have the point just inside the reinforcement
+                start = member.submember_start + 1e-3  # add small value to have the point just inside the reinforcement
 
                 # Find the index where x should be inserted
                 indexstart = np.searchsorted(xlist, start)
@@ -494,7 +497,7 @@ class Airfoil:
                 # Insert x into the array
                 xlist = np.insert(xlist, indexstart, start)
 
-                end = member.subpanel_end + 1e-3 # add small value to have the point just outside the reinforcement
+                end = member.submember_end + 1e-3 # add small value to have the point just outside the reinforcement
                 indexend = np.searchsorted(xlist, end)
                 xlist = np.insert(xlist, indexend, end)
             else:
@@ -542,6 +545,7 @@ class Airfoil:
             Ex = member.panel.Ex
         else:
             Ex = member.Ex(x)
+
         s1 = e1 * Ex
         s2 = e2 * Ex
 
@@ -551,8 +555,20 @@ class Airfoil:
             td = member.panel.h
         else:
             td = member.h(x)
-        B1 = (td * b / 6) * (2 + s2 / s1)
-        B2 = (td * b / 6) * (2 + s1 / s2)
+
+        # IMPORTANT:
+        # If the strains are both very close to 0 due to the points being close to the neutral axis, this calculation
+        # will have numerical instabilities that deteriorate the accuracy of the solution. As a result, assume then
+        # that the strain is equal in both booms (zero value thus equal), and assign the ratio between stresses as s1/s2 = 1:
+        # check also 'Aircraft structures for engineering students' page 607.
+
+        slow = 1e-11
+        if e1 < slow or e2 < slow:
+            B1 = (td * b / 6) * 3
+            B2 = (td * b / 6) * 3
+        else:
+            B1 = (td * b / 6) * (2 + s2 / s1)
+            B2 = (td * b / 6) * (2 + s1 / s2)
 
         # Calculate area ratio
         area_ratio = (B1 + B2) / (b * td)
@@ -562,6 +578,7 @@ class Airfoil:
         p1print = [p1[0]+self.xbar, p1[1] + self.ybar]
         p2print = [p2[0] + self.xbar, p2[1] + self.ybar]
         if not (1 - tolerance <= area_ratio <= 1 + tolerance):
+            # TODO: fix this! when the magnitudes of strain are different due to higher or lower values for moment, the fixed value of 10e-11 does nothing!
             print(
                 f"Warning: Area ratio out of bounds: {area_ratio:.3f} at point {p1print}, {p2print}, ybar = {self.ybar:.3f} "
                 f"with member start {member.startcoord} and end {member.endcoord}. e1 = {e1}, e2 = {e2}"
@@ -589,29 +606,29 @@ class Airfoil:
             xlist = np.linspace(member.startcoord[0] if side == 'top' else member.endcoord[0], member.endcoord[0] if side == 'top' else member.startcoord[0], npoints)
 
 
-            if member.subpanel:
-                # if so, we need the start and end points of the subpanel:
+            if member.submember:
+                # if so, we need the start and end points of the submember:
 
                 if side == 'top':
-                    start = member.subpanel_start + 1e-3  # add small value to have the point just inside the reinforcement
+                    start = member.submember_start + 1e-3  # add small value to have the point just inside the reinforcement
                     # Find the index where x should be inserted
                     indexstart = np.searchsorted(xlist, start)
 
                     # Insert x into the array
                     xlist = np.insert(xlist, indexstart, start)
 
-                    end = member.subpanel_end + 1e-3 # add small value to have the point just outside the reinforcement
+                    end = member.submember_end + 1e-3 # add small value to have the point just outside the reinforcement
                     indexend = np.searchsorted(xlist, end)
                     xlist = np.insert(xlist, indexend, end)
 
                 elif side == 'bot':
-                    start = member.subpanel_start + 1e-3  # add small value to have the point just inside the reinforcement
+                    start = member.submember_start + 1e-3  # add small value to have the point just inside the reinforcement
                     # Find the index where x should be inserted for descending order
                     index = np.searchsorted(xlist[::-1], start)
 
                     # Insert x into the array
                     xlist = np.insert(xlist, len(xlist) - index, start)
-                    end = member.subpanel_end + 1e-3  # add small value to have the point just outside the reinforcement
+                    end = member.submember_end + 1e-3  # add small value to have the point just outside the reinforcement
 
                     indexend = np.searchsorted(xlist[::-1], end)
                     xlist = np.insert(xlist, len(xlist) - indexend, end)
@@ -778,12 +795,12 @@ class Airfoil:
         sectionfortest = self.sectionlist[1]
         forceintesity = sectionfortest.prefactor * sectionfortest.deltawhole
         order_forceintensity = np.floor(np.log10(abs(forceintesity)))
-        print('order force intensity: ',order_forceintensity)
+        # print('order force intensity: ',order_forceintensity)
 
         # now find the order of magnitude for the areas:
         areasection = sectionfortest.A
         order_areasection = np.floor(np.log10(abs(areasection)))
-        print('order areasection: ',order_areasection)
+        # print('order areasection: ',order_areasection)
 
         deltaorder_magnitude = abs(order_areasection - order_forceintensity)
         deltaorder_unit = np.round(deltaorder_magnitude/3)
@@ -798,20 +815,20 @@ class Airfoil:
         array = np.zeros((len(self.sectionlist) + 1, len(self.sectionlist) + 1))
 
         for i, section in enumerate(self.sectionlist):
-            print('section number:', i)
+            # print('section number:', i)
             if i == 0:
                 print(section.deltaback)
                 # special case: first section
                 array[i, i] = section.prefactor * section.deltawhole * qscalingfactor
                 array[i, i + 1] = -section.prefactor * section.deltaback * qscalingfactor
             elif i == len(self.sectionlist)-1:
-                print(section.deltafront)
+                # print(section.deltafront)
                 # special case: last section
                 array[i, i] = section.prefactor * section.deltawhole * qscalingfactor
                 array[i, i-1] = -section.prefactor * section.deltafront * qscalingfactor
             else:
-                print(section.deltafront)
-                print(section.deltaback)
+                # print(section.deltafront)
+                # print(section.deltaback)
                 # all other sections:
                 array[i, i] = section.prefactor * section.deltawhole * qscalingfactor
                 array[i, i + 1] = -section.prefactor * section.deltaback * qscalingfactor
@@ -826,30 +843,35 @@ class Airfoil:
         for i, section in enumerate(self.sectionlist):
             vector[i] = -section.int_qb_ds_over_t * section.prefactor * qscalingfactor
         vector[-1] = sum([-section.ShearMoment * Mscalingfactor for section in self.sectionlist])
-
-        vector[-1] += (self.Sx*(self.N0-self.ybar) + -self.Sy * (self.E0-self.xbar)) * Mscalingfactor
-        print('--------------------------------------------------------------------------')
-        print('array:')
-        print(array)
-        print('vector:')
-        print(vector)
-        print('--------------------------------------------------------------------------')
+        
+        # moment arms of shear forces wrt shear center (neutral point):
+        y_arm = self.yshear - self.ybar
+        x_arm = self.xshear - self.xbar
+        self.Moment_applied = self.Sx*y_arm + -self.Sy * x_arm
+        vector[-1] += self.Moment_applied * Mscalingfactor
+        # print('--------------------------------------------------------------------------')
+        # print('array:')
+        # print(array)
+        # print('vector:')
+        # print(vector)
+        # print('--------------------------------------------------------------------------')
         # we now solve the system
         x, residuals, rank, s = lstsq(array, vector)
         x[:-1] = x[:-1] / qscalingfactor
         x[-1] = x[-1] / radscalingfactor
         condnr = np.linalg.cond(array)
-        print('conditioning nr:', condnr)
-        print('solution vector:', x)
+        # print('conditioning nr:', condnr)
+        # print('solution vector:', x)
         # the shear flow corrections are as follows:
         correctionfactors = x[0:-1]
-        print('correction factors: ', correctionfactors)
+        # print('correction factors: ', correctionfactors)
         for i, Section in enumerate(self.sectionlist):
             Section.qs0 = correctionfactors[i]
             Section.ShearCorrection()
 
-        for Section in self.sectionlist:
-            Section.PlotShearFlow()
+        if self.plot:
+            for Section in self.sectionlist:
+                Section.PlotShearFlow()
         return x
 
     def ShearSuperPosition(self):
@@ -932,26 +954,46 @@ class Airfoil:
             norm = TwoSlopeNorm(vmin=-max_abs_value, vcenter=0, vmax=max_abs_value)
             normalized_values = values
 
+        x_coords = []
+        y_coords = []
         # Plot the lines
         fig, ax = plt.subplots()
         for (p1, p2), value in zip([(p1, p2) for p1, p2, value in allsegments], normalized_values):
             x1, y1 = p1
             x2, y2 = p2
+
+            x_coords.extend([x1, x2])
+            y_coords.extend([y1, y2])
             ax.plot([x1, x2], [y1, y2], color=cmap(norm(value)), linewidth=2)
 
+        # Normalize the shear force vector to 0.25 * chord
+        chord = self.chordlength
+        vector_magnitude = (self.Sx ** 2 + self.Sy ** 2) ** 0.5
+        normalized_sx = self.Sx / vector_magnitude * 0.1 * chord
+        normalized_sy = self.Sy / vector_magnitude * 0.1 * chord
+
+        # Add shear force vector using quiver
+        ax.quiver(
+            self.xshear - self.xbar, self.yshear - self.ybar, normalized_sx, normalized_sy,
+            angles='xy', scale_units='xy', scale=1, color='black', label='Shear Force'
+        )
+        vector_tip_x = self.xshear - self.xbar + normalized_sx
+        vector_tip_y = self.yshear - self.ybar + normalized_sy
+        x_coords.append(vector_tip_x)
+        y_coords.append(vector_tip_y)
         # Set equal scaling
         ax.set_aspect('equal', adjustable='box')
-
+        ax.set_xlim(min(x_coords) - 0.1 * chord, max(x_coords) + 0.1 * chord)
+        ax.set_ylim(min(y_coords) - 0.05 * chord, max(y_coords) + 0.05 * chord)
         # Add a color bar
         sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
         sm.set_array([])
         fig.colorbar(sm, ax=ax, label='Value')
-
+        ax.grid()
         ax.set_xlabel('X-axis')
         ax.set_ylabel('Y-axis')
         ax.set_title('Shear flow, clockwise is positive, from the origin')
-        plt.show()
-        return
+        return plt
 
     def PlotNormalStrain(self):
         '''
@@ -1043,8 +1085,7 @@ class Airfoil:
         ax.set_xlabel('X-axis')
         ax.set_ylabel('Y-axis')
         ax.set_title('Normal force intensity (N/mm)')
-        plt.show()
-        return
+        return plt
     def membercurvature(self, member, side):
         '''
         Assigns curvature to members. the reason we dont do this in the member is because the booms are located on linearly
@@ -1061,7 +1102,7 @@ class Airfoil:
         elif side == 'bot':
             points = self.botcoordinates
         else:
-            print('side not assigned, must be assigned either "top" or "bot"')
+            raise ValueError('side not assigned, must be assigned either "top" or "bot"')
         filtered_points = [point for point in points if lower_bound <= point[0] <= upper_bound]
 
         # now find the radius:
@@ -1129,7 +1170,7 @@ class Airfoil:
         self.Mx, self.My = moments
         self.Sx, self.Sy = shearforces
         # TODO: fix these dimensions so they are in the global (wing) FOR?
-        self.E0, self.N0 = center # relative to the local airfoil FOR
+        self.xshear, self.yshear = center # relative to the local airfoil FOR
 
         # Functions for the normal stresses/deformations:
         self.Neutralpoints() # calculates neutral point
@@ -1142,43 +1183,43 @@ class Airfoil:
         self.ShearSuperPosition()
         # we want to check the total shear force exerted by the section:
         self.ShearforceAnalysis()
-        self.PlotShearFlow()
-        self.PlotNormalForceIntensity()
+        if self.plot:
+            self.PlotShearFlow()
+            self.PlotNormalForceIntensity()
         return
 
     def ShearforceAnalysis(self):
+        Fxtop, Fytop, Mtop = self.force_moment_semgents(self.topmembers)
+        Fxbot, Fybot, Mbot = self.force_moment_semgents(self.botmembers)
+        Fxspar, Fyspar, Mspar = self.force_moment_semgents(self.sparmembers)
+
+        Fx = Fxtop + Fxbot + Fxspar
+        Fy = Fytop + Fybot + Fyspar
+        M = Mtop + Mbot + Mspar
+        return Fx, Fy, M
+
+    def force_moment_semgents(self, memberlist):
         Fx = 0
         Fy = 0
-        for member in self.topmembers:
+        M = 0
+        for member in memberlist:
             for segment in member.segments:
-                x1, y1 = segment.p1
-                x2, y2 = segment.p2
-                dx = x2 - x1
-                dy = y2 - y1
-                Fx += segment.qs * dx
-                Fy += segment.qs * dy
+                # shear moments: (copied from section code)
+                p1 = np.array(segment.p1)
+                p2 = np.array(segment.p2)
+                center = p1 + (p2 - p1) / 2
+                rx, ry = center[0], center[1]
 
-        for member in self.botmembers:
-            for segment in member.segments:
-                x1, y1 = segment.p1
-                x2, y2 = segment.p2
-                dx = x2 - x1
-                dy = y2 - y1
-                Fx += segment.qs * dx
-                Fy += segment.qs * dy
-
-        for member in self.sparmembers:
-            for segment in member.segments:
-                x1, y1 = segment.p1
-                x2, y2 = segment.p2
-                dx = x2 - x1
-                dy = y2 - y1
-                Fx += segment.qs * dx
-                Fy += segment.qs * dy
-
-        print('Fx from segments: ', Fx)
-        print('Fy from segments: ', Fy)
-        return
+                # force vector:
+                directionvector = p2 - p1
+                # force by segments may not be consistent?!
+                f = segment.qs * directionvector
+                fx, fy = f[0], f[1]
+                Fx += fx
+                Fy += fy
+                moment = ry * fx - rx * fy
+                M += moment
+        return Fx, Fy, M
 
     def FailureAnalysis_CSA(self):
         # first set the curvature of the members:
@@ -1194,19 +1235,22 @@ class Airfoil:
 if __name__ == '__main__':
 
     Laminate = LaminateBuilder([45, -45, 0 ,90], True, True, 1)
-    Member = Member(Laminate)
+    member = Member(Laminate)
     sparlocations = [80, 250]
-    sparmembers = [copy.deepcopy(Member) for _ in range(len(sparlocations))]
-    topmembers = [copy.deepcopy(Member) for _ in range(len(sparlocations)+1)]
-    botmembers = [copy.deepcopy(Member) for _ in range(len(sparlocations)+1)]
+    sparmembers = [copy.deepcopy(member) for _ in range(len(sparlocations))]
+    topmembers = [copy.deepcopy(member) for _ in range(len(sparlocations)+1)]
+    botmembers = [copy.deepcopy(member) for _ in range(len(sparlocations)+1)]
 
     reinforcementpaneltop = LaminateBuilder([45, -45, 0, 0, 0, 0, 0, 0, 90], True, True, 1)
     reinforcementpanelbot = LaminateBuilder([45, -45, 0, 0, 0, 0, 0, 0, 90], True, True, 1)
+
+    topsubmember = Member(reinforcementpaneltop)
+    botsubmember = Member(reinforcementpanelbot)
     reinforcement_start = 60
     reinforcement_end = 100
 
     type = 'NACA2410'
-    Airfoil = Airfoil(type, 1, 300, sparlocations, topmembers, botmembers, sparmembers, reinforcementpaneltop, 60, 100, reinforcementpanelbot, 60, 100)
+    Airfoil = Airfoil(type, 1, 300, sparlocations, topmembers, botmembers, sparmembers, topsubmember, 60, 100, botsubmember, 60, 100)
     Airfoil.SolveStresses_CSA([30000, 0], [0, 80], [300/4, 0])
     Airfoil.FailureAnalysis_CSA()
 

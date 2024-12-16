@@ -7,7 +7,7 @@ from Toolbox.Member import Member
 from Data.Panels import Sandwiches, Laminates
 
 class Wing:
-    def __init__(self, liftdistribution, coorddistribution, LElocations, thicknessdistribution, halfspan, ribcoordinates, sparcoordinates, trend = None, brend = None):
+    def __init__(self, liftdistribution, coorddistribution, LElocations, thicknessdistribution, halfspan, ribcoordinates, sparcoordinates):
         """
         :param airfoilcoords: list
         - list containing 2 lists
@@ -56,10 +56,17 @@ class Wing:
         self.trwidth = None
         self.brwidth = None
 
+        self.weight = 0.5       # Total weight of wing in kg
+
         # TODO: put in some sort of global top- and bottom reinforcement panel, could be in same format as normal panels
         self.trpanels = []
         self.brpanels = []
         # TODO: put in a global way to find the width of the reinforcement
+
+        self.tip_buffer = 200   # Distance from the tip at which we no longer analyze the wing due to (close to) 0 thickness and load
+        self.airfoils = []      # list of airfoil objects along half span of wing
+        self.airfoilys = []     # Y locations of airfoil sections to be simulated
+        self.airoil_maxFIs = [] # Max failure indicator in airfoil sections
 
     def lift_at(self, y):
         """
@@ -107,7 +114,7 @@ class Wing:
         y = np.linspace(0, self.halfspan, len(self.liftdistribution))
 
         # For each spanwise location, integrate the lift from y to half-span
-        for i in range(len(liftdistribution)):
+        for i in range(len(self.liftdistribution)):
             # Lift distribution from yi to b/2
             lift_segment = self.liftdistribution[i:]
             y_segment = y[i:]
@@ -138,6 +145,9 @@ class Wing:
         self.shear_distribution = shear_distribution
         return shear_distribution
 
+    def shear_location_at(self, y):
+        return self.chord_at(0)/4, 0
+
     def shear_at(self, location):
         """
         Interpolates the shear force at a specific location along the span.
@@ -162,37 +172,20 @@ class Wing:
         moment_interp = interp1d(y, self.moment_distribution_internal, kind='linear')
         return moment_interp(location)
 
-    def reinforcementpaneltop_at(self, location):
-        # for a given location y, there must be members defined ->
-        # Check if the location is not greater than the largest value ->
-        endpoint = self.trpanels[1]
+    def reinforcementpanel_at(self, location, side):
+        # for a given location y, members are defined
+        if side == 'top':
+            panels = self.trpanels
+        elif side == 'bot':
+            panels = self.brpanels
 
-        # if the location is past the endpoint for the reinforcement then return None:
-        if location > endpoint:
+        panel = self.panels_at(panels, location)
+        if panel:
+            panel = copy.deepcopy(panel)
+            rpanel = Member(panel)
+            return rpanel
+        else:
             return None
-
-        # now use the found index to find the panel:
-        panel = self.trpanels[0]
-
-        # finally make the panel:
-        trpanel = Member(panel)
-        return trpanel
-
-    def reinforcementpanelbot_at(self, location):
-        # for a given location y, there must be members defined ->
-        # Check if the location is not greater than the largest value ->
-        endpoint = self.brpanels[1]
-
-        # if the location is past the endpoint for the reinforcement then return None:
-        if location > endpoint:
-            return None
-
-        # now use the found index to find the panel:
-        panel = self.brpanels[0]
-
-        # finally make the panel:
-        brpanel = Member(panel)
-        return brpanel
 
     def trstartend_at(self, location):
         """
@@ -202,11 +195,12 @@ class Wing:
         """
         tr_x = []
         tr_y = []
-
+        reinforcement_end = self.trpanels[-1][1]
+        if location > reinforcement_end:
+            return None, None
         for coord in self.trcoordinates:
             tr_x.append(coord[0])
             tr_y.append(coord[1])
-        print(tr_x, tr_y)
         tr_interp = interp1d(tr_y, tr_x, kind='linear', fill_value="extrapolate")
         return tr_interp(location) - self.trwidth/2, tr_interp(location) + self.trwidth/2
 
@@ -218,7 +212,9 @@ class Wing:
         """
         br_x = []
         br_y = []
-
+        reinforcement_end = self.trpanels[-1][1]
+        if location > reinforcement_end:
+            return None, None
         for coord in self.brcoordinates:
             br_x.append(coord[0])
             br_y.append(coord[1])
@@ -232,23 +228,27 @@ class Wing:
         It assigns the members and reinforcement correctly
         :return:
         """
-        analysislocations = np.linspace(0, self.halfspan-200, 10)
+        analysislocations = np.linspace(0, self.halfspan - self.tip_buffer, 10)
+        # TODO: add twist in the frame of reference
 
         airfoils = []
         for y in analysislocations:
             topmembers = self.topmembers_at(y)
             botmembers = self.botmembers_at(y)
             sparmembers = self.sparmembers_at(y)
-            reinforcementpaneltop = self.reinforcementpaneltop_at(y)
-            reinforcementpanelbot = self.reinforcementpanelbot_at(y)
-            sparlocations = self.spar_positions_at(y)
+            reinforcementpaneltop = self.reinforcementpanel_at(y, 'top')
+            reinforcementpanelbot = self.reinforcementpanel_at(y, 'bot')
+            sparlocations = [self.spar_positions_at(y)[i] - self.LE_at(y) for i in range(len(self.spar_positions_at(y)))]
 
             trstart, trend = self.trstartend_at(y)
             brstart, brend = self.brstartend_at(y)
+            chord = self.chord_at(y)
             type = 'NACA2410'
             # make the option:
-            airfoil = Airfoil(type, 1, 300, sparlocations, topmembers, botmembers, sparmembers, reinforcementpaneltop, trstart,
+            airfoil = Airfoil(type, 1, chord, sparlocations, topmembers, botmembers, sparmembers, reinforcementpaneltop, trstart,
                               trend, reinforcementpanelbot, brstart, brend)
+            airfoil.xshear = self.shear_location_at(y)[0] - self.LE_at(y)   # x coordinate of point of application in airfoil FOR
+            airfoil.yshear = self.shear_location_at(y)[1]                   # y coordinate of point of application in airfoil FOR, without twist is equal to 0
             airfoils.append(airfoil)
 
         self.airfoils = airfoils
@@ -277,8 +277,10 @@ class Wing:
     def panels_at(self, objects_list, coordinate):
         for panel, end_coordinate in objects_list:
             if coordinate <= end_coordinate:
-                return panel
-        return None  # or raise an exception if you prefer
+                paneltoreturn = panel
+            elif coordinate > end_coordinate:
+                paneltoreturn = None
+        return paneltoreturn
 
     def topmembers_at(self, y):
         # for a given location y, there must be members defined ->
@@ -320,54 +322,12 @@ class Wing:
         kx, ky = airfoil.curvatures(moment, 0)
         return kx, ky
 
-    def FailureAnalysis_at(self, y):
-        moment = self.moment_at(y)
-        shear = self.shear_at(y)
-        spars = self.spar_positions_at(y) - self.LE_at(
-            y)  # list of spar locations? or of objects? these indicate the locations of the spars for
-        # cross sectional analysis
-        thickness = self.thickness_at(y)
-        chordlength = self.chord_at(y)
-        topmembers = self.topmembers_at(y)
-        botmembers = self.botmembers_at(y)
-        sparmembers = self.sparmembers_at(y)
-        airfoil = Airfoil('NACA2410', thickness, chordlength, spars, topmembers, botmembers, sparmembers)
-
-        # First solve for the stresses:
-        airfoil.SolveStresses_CSA([moment, 0], [0, shear], [-70, 0])
-
-        # Then do the failure analysis:
-        airfoilFI = airfoil.FailureAnalysis_CSA()
-        return airfoilFI
-
-    def FIplot(self, num):
-        '''
-        Check failure at a certain nr of points. Especially right behind the ribs
-        :return:
-        '''
-        # TODO: remove -300, its a random buffer so that we dont check too close to the tip which lead to problems, find a better solution
-        ycoordinates = np.linspace(0, self.halfspan-300, num)
-        RIBFIs = [self.FailureAnalysis_at(coordinate) for coordinate in ycoordinates]
-        print('RIBFIs calculated')
-
-        # max FI as func of span
-        plt.figure(figsize=(10, 6))
-        plt.plot(ycoordinates, RIBFIs, label='Max found failure indicator at point through half span')
-        plt.xlabel('Half-span (y)')
-        plt.ylabel('Max FI')
-        plt.title('Failure indicators')
-        plt.legend()
-        plt.grid(True)
-        plt.show()
-        return max(RIBFIs)
-
     def calculate_deflection(self, num_points=10):
         # Sample points along the half span
         y_points = np.linspace(0, self.halfspan, num=num_points)
 
         # Calculate curvatures at the sampled points
         curvatures = np.array([self.curvatures_at(y) for y in y_points])
-        print(len(y_points), len(curvatures))
 
         # Integrate curvature to get slope
         slope = self.cumulative_trapezoid(curvatures, y_points, initial=0)
@@ -427,41 +387,89 @@ class Wing:
 
     def plot_wing_planform(self):
         """
-        Plots the wing planform, including leading and trailing edges, spars, and ribs.
+        Plots the wing planform, including leading and trailing edges, spars, ribs, and reinforcements, with x and y axes swapped.
         :return: None
         """
         trailing_edge = [LE + chord for LE, chord in zip(self.LElocations, self.chorddistribution)]
-        plt.figure(figsize=(12, 6))
-        plt.plot(np.linspace(0, self.halfspan, len(self.LElocations)), self.LElocations, label='Leading Edge')
-        plt.plot(np.linspace(0, self.halfspan, len(trailing_edge)), trailing_edge, label='Trailing Edge')
-        plt.fill_between(np.linspace(0, self.halfspan, len(self.LElocations)), self.LElocations, trailing_edge, color='lightblue', alpha=0.5)
+        spanwise_locations = np.linspace(0, self.halfspan, len(self.LElocations))
 
-        # Plot the spars
+        plt.figure(figsize=(9, 12))
+
+        # Swap x and y for leading edge and trailing edge
+        plt.plot(self.LElocations, spanwise_locations, label='Leading Edge')
+        plt.plot(trailing_edge, spanwise_locations, label='Trailing Edge')
+        plt.fill_betweenx(spanwise_locations, self.LElocations, trailing_edge, color='lightblue', alpha=0.5)
+
+        # Plot the spars with x and y swapped
         for spar in self.sparcoordinates:
             spar_x = [coord[0] for coord in spar]
             spar_y = [coord[1] for coord in spar]
-            plt.plot(spar_y, spar_x, label='Spar', color='red')
+            plt.plot(spar_x, spar_y, label='Spar', color='red')
 
-        # Plot the ribs
+        # Plot the ribs with x and y swapped
         for rib in self.ribcoordinates:
-            LE_at_rib = np.interp(rib, np.linspace(0, self.halfspan, len(self.LElocations)), self.LElocations)
-            TE_at_rib = np.interp(rib, np.linspace(0, self.halfspan, len(trailing_edge)), trailing_edge)
-            plt.plot([rib, rib], [LE_at_rib, TE_at_rib], color='green', linestyle='--', label='Rib' if rib == self.ribcoordinates[0] else "")
+            LE_at_rib = np.interp(rib, spanwise_locations, self.LElocations)
+            TE_at_rib = np.interp(rib, spanwise_locations, trailing_edge)
+            plt.plot([LE_at_rib, TE_at_rib], [rib, rib], color='green', linestyle='--',
+                     label='Rib' if rib == self.ribcoordinates[0] else "")
 
-        plt.xlabel('Spanwise location (y)')
-        plt.ylabel('Chordwise location (x)')
+        # Plot the top reinforcements
+        if self.trcoordinates:
+            tr_x = [coord[0] for coord in self.trcoordinates]
+            tr_y = [coord[1] for coord in self.trcoordinates]
+
+            # Swap x and y for reinforcement outlines
+            tr_x_front = [tr_x[i] + self.trwidth / 2 for i in range(len(tr_x))]
+            tr_x_back = [tr_x[i] - self.trwidth / 2 for i in range(len(tr_x))]
+
+            plt.plot(tr_x_front, tr_y, color='black', label='Top Reinforcement Front Edge')
+            plt.plot(tr_x_back, tr_y, color='black', label='Top Reinforcement Back Edge')
+            plt.plot([tr_x_front[-1], tr_x_back[-1]], [tr_y[-1], tr_y[-1]], color='blue', label='Line from (0,0) to (10,5)')
+
+            plt.fill_betweenx(tr_y, tr_x_front, tr_x_back, color='black', alpha=0.5)
+
+        # Plot the bottom reinforcements
+        if self.brcoordinates:
+            br_x = [coord[0] for coord in self.brcoordinates]
+            br_y = [coord[1] for coord in self.brcoordinates]
+
+            br_start = min(br_x)
+            br_end = max(br_x)
+            # plt.fill_between(br_y, br_start, br_end, color='purple', alpha=0.6, label="Bottom Reinforcement")
+
+        # plotting settings
+        plt.xlabel('Chordwise location (x)')
+        plt.ylabel('Spanwise location (y)')
         plt.title('Wing Planform')
         plt.legend()
         plt.grid(True)
         plt.axis('equal')
-        plt.show()
+
+        return plt
 
     def Failureanalysis(self):
         """"
         Does failure analysis of the wing
         :return:
         """
+        airfoil_maxFIs = []
+        for airfoil in self.airfoils:
+            airfoil_maxFI = airfoil.FailureAnalysis_CSA()
+            airfoil_maxFIs.append(airfoil_maxFI)
+
+        self.airoil_maxFIs = airfoil_maxFIs
         return
+
+    def plot_maxFI(self):
+        # Plot the deflection
+        plt.figure(figsize=(10, 6))
+        plt.plot(self.airfoilys, self.airoil_maxFIs, label='FI_max')
+        plt.xlabel('Half-span (y)')
+        plt.ylabel('Max failure indicator')
+        plt.title('Maximum failure indicator at each airfoil')
+        plt.legend()
+        plt.grid(True)
+        return plt
 
 def generate_chord_and_leading_edge(n, halfspan, coord_at_root):
     y = np.linspace(0, halfspan, n)
@@ -477,59 +485,3 @@ def generate_lift(n, halfspan, lift):
     lr = (np.pi/4)*halflift/halfspan
     lifts = lr * np.sqrt(1 - (y / halfspan) ** 2)
     return lifts
-
-# Example usage:
-n = 20  # Number of points
-halfspan = 1500  # Half span of the wing
-coord_at_root = 300  # Chord length at the root
-
-chord_lengths, leading_edge_locations = generate_chord_and_leading_edge(n, halfspan, coord_at_root)
-
-# Example usage:
-liftdistribution = generate_lift(10, 1500, 981)
-thicknessdistribution = [10, 12, 14, 16, 18]  # Example thickness distribution
-halfspan = 1500  # Half span of the wing
-sparcoordinates = [[[300/4, 0], [15 + 250/4, 1000], [75, 1500]],
-                   [[200, 0], [185, 1000], [75, 1500]]]  # Example spar coordinates
-ribcoordinates = [0, 600, 1200, 1400]
-
-reinforcementcoordinates = [[300/4, 0], [15 + 250/4, 1000], [75, 1500]] # list containing reinforcement coordinates: [[x, y], [x, y] ... ]
-
-
-
-
-
-wing = Wing(liftdistribution, chord_lengths, leading_edge_locations, thicknessdistribution, halfspan, ribcoordinates, sparcoordinates)
-
-wing.toppanels = [[Sandwiches['PanelWingRoot'], 500], [Sandwiches['PanelWingRoot'], 1600]]
-wing.botpanels = [[Sandwiches['PanelWingRoot'], 500], [Sandwiches['PanelWingRoot'], 1600]]
-wing.trpanels = [Laminates['Reinforcement'], 700]
-wing.brpanels = [Laminates['Reinforcement'], 700]
-wing.trwidth = 50
-wing.brwidth = 50
-wing.trcoordinates = reinforcementcoordinates
-wing.brcoordinates = reinforcementcoordinates
-
-
-wing.sparpanels = Sandwiches['SparPanels']
-moment_distribution = wing.internal_moment()
-shear_distribution = wing.shear_force()
-
-location = 1200  # Example location along the half span
-shear_at_location = wing.shear_at(location)
-moment_at_location = wing.moment_at(location)
-spar_positions = wing.spar_positions_at(location)
-LE_at_location = wing.LE_at(location)
-
-wing.GenerateAirfoils()
-wing.SolveStresses_CSA()
-# print("Shear Force at location", location, ":", shear_at_location)
-# print("Moment at location", location, ":", moment_at_location)
-# print("Spar positions at location", location, ":", spar_positions)
-# print("Leading Edge at location", location, ":", LE_at_location)
-# # print('airfoil curvature:', location, ":", wing.curvatures_at(location))
-
-# Plot the wing planform
-wing.plot_wing_planform()
-# wing.plot_deflection(10)
-# print(wing.FIplot(10))
