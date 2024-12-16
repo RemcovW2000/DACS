@@ -62,7 +62,7 @@ CF = {
         "failureproperties": [230000, 0.2, 1.1, 1285.2, 793.5, 1285.2, 793.5, 100]
     },
     'T700': {
-        't': 0.25,  # random
+        't': 0.12,  # random
         'rho': 0.00161,  # 1g/mm3, random
         'E1': 135000,  # datasheet
         'E2': 11200,  # From assignment Christos

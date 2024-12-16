@@ -1,9 +1,7 @@
 import numpy as np
-from Toolbox.Member import Member
-from Toolbox.Laminate import Laminate, LaminateBuilder
-from Data.Panels import LaminateQI
 
-Loads = [1000, 0, 200, 0, 0, 0]
-member = Member(LaminateQI, Loads)
-# member.R = 1000
-print(member.BucklingAnalysis())
+array = np.array([[1, 2],
+                  [3, 4]])
+
+print(array)
+print(array[0, 1])

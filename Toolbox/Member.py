@@ -24,7 +24,10 @@ class Member:
         """
         self.panel = panel # could be either laminate or sandwich, both should work
         self.Loads = Loads # total loads, not intensity!!!
-        self.h = self.panel.h
+        self.submember = None # this is a submember for adding local reinforcement.
+        self.submember_start = None # in mm,
+        self.submember_end = None
+        # this submember is just an instance of the member class
 
         self.startcoord = [] # from leading to trailing edge for wing
         self.endcoord = [] # from leading to trailing edge for wing
@@ -51,6 +54,31 @@ class Member:
 
         self.BVID_energy = 0.113*2000/25.4 # Joules per inch -> mm thickness
         # ----------------------------------------------------------------
+
+    def Ex(self, x):
+        # function should return Ex based on value for x, whether it's in the submember or not.
+        # reference point for x = 0 is the global reference point
+        if self.submember:
+            if x >= self.submember_start and x <= self.submember_end:
+                Ex = self.submember.panel.Ex
+            else:
+                Ex = self.panel.Ex
+        else:
+            Ex = self.panel.Ex
+        return Ex
+
+    def h(self, x):
+        # function should return h based on value for x, whether it's in the submember or not.
+        # submember is a member type object!
+        # reference point for x = 0 is the global reference point
+        if self.submember:
+            if x >= self.submember_start and x <= self.submember_end:
+                h = self.submember.panel.h
+            else:
+                h = self.panel.h
+        else:
+            h = self.panel.h
+        return h
 
     def CSA_FailureAnalysis(self):
         ''' Point of this function is to assign the loads of the member from the cross sectional analysis -> get loads
@@ -745,14 +773,3 @@ class Member:
         plt.title(f'Integrands as a function of r at z={z}')
         plt.legend()
         plt.show()
-
-
-
-
-
-
-
-
-
-
-

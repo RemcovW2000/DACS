@@ -32,6 +32,8 @@ class Laminate:
             i.z1 = i.z1 - 0.5 * h
         self.h = h
 
+        self.stackingsequence = [lamina.theta for lamina in laminas]
+
         # We calculate the ABD matrix in initialisation
         self.CalculateABD()
         self.CalculateEquivalentProperties()
