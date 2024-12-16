@@ -27,7 +27,12 @@ chord_at_root = 300  # Chord length at the root
 chord_lengths, leading_edge_locations = generate_chord_and_leading_edge(n, halfspan, chord_at_root)
 
 # Example usage:
-liftdistribution = generate_lift(10, 1500, 981)
+weight = 25         # kg
+load_factor = 4     # g
+g = 9.81            # m/s
+lift = weight*load_factor*g
+liftdistribution = generate_lift(50, halfspan, lift)
+
 thicknessdistribution = [10, 12, 14, 16, 18]  # Example thickness distribution
 halfspan = 1500  # Half span of the wing
 sparcoordinates = [[[300/4, 0], [15 + 250/4, 1000], [75, 1500]],
