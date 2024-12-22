@@ -413,29 +413,25 @@ class Wing:
             plt.plot([LE_at_rib, TE_at_rib], [rib, rib], color='green', linestyle='--',
                      label='Rib' if rib == self.ribcoordinates[0] else "")
 
-        # Plot the top reinforcements
+        # Plot the reinforcement:
         if self.trcoordinates:
-            tr_x = [coord[0] for coord in self.trcoordinates]
-            tr_y = [coord[1] for coord in self.trcoordinates]
-
-            # Swap x and y for reinforcement outlines
-            tr_x_front = [tr_x[i] + self.trwidth / 2 for i in range(len(tr_x))]
-            tr_x_back = [tr_x[i] - self.trwidth / 2 for i in range(len(tr_x))]
+            tr_x_front, tr_x_back, tr_y = self.GetReinforcementsCoords(self.trcoordinates, self.trpanels, self.trwidth)
 
             plt.plot(tr_x_front, tr_y, color='black', label='Top Reinforcement Front Edge')
             plt.plot(tr_x_back, tr_y, color='black', label='Top Reinforcement Back Edge')
-            plt.plot([tr_x_front[-1], tr_x_back[-1]], [tr_y[-1], tr_y[-1]], color='blue', label='Line from (0,0) to (10,5)')
+            plt.plot([tr_x_front[-1], tr_x_back[-1]], [tr_y[-1], tr_y[-1]], color='black')
 
             plt.fill_betweenx(tr_y, tr_x_front, tr_x_back, color='black', alpha=0.5)
 
         # Plot the bottom reinforcements
         if self.brcoordinates:
-            br_x = [coord[0] for coord in self.brcoordinates]
-            br_y = [coord[1] for coord in self.brcoordinates]
+            br_x_front, br_x_back, br_y = self.GetReinforcementsCoords(self.brcoordinates, self.brpanels, self.brwidth)
 
-            br_start = min(br_x)
-            br_end = max(br_x)
-            # plt.fill_between(br_y, br_start, br_end, color='purple', alpha=0.6, label="Bottom Reinforcement")
+            plt.plot(br_x_front, br_y, color='blue', label='bot Reinforcement Front Edge')
+            plt.plot(br_x_back, br_y, color='blue', label='bot Reinforcement Back Edge')
+            plt.plot([br_x_front[-1], br_x_back[-1]], [br_y[-1], br_y[-1]], color='blue')
+
+            plt.fill_betweenx(br_y, br_x_front, br_x_back, color='blue', alpha=0.5)
 
         # plotting settings
         plt.xlabel('Chordwise location (x)')
@@ -446,6 +442,28 @@ class Wing:
         plt.axis('equal')
 
         return plt
+
+    def GetReinforcementsCoords(self, coordinates, panels, width):
+        # find reinforcement coordinates:
+        tr_x = [coord[0] for coord in coordinates]
+        tr_y = [coord[1] for coord in coordinates]
+
+        # find end coordinate:
+        y_end = panels[-1][-1]
+        # find x coordinate at y coordinate:
+        f = interp1d(tr_y, tr_x, kind='linear')
+        x_end = f(y_end)
+
+        # make new list:
+        tr_y = [y for y in tr_y if y < y_end]
+        tr_y.append(y_end)
+
+        tr_x = [tr_x[i] for i in range(len(tr_y) - 1)]
+        tr_x.append(x_end)
+
+        tr_x_front = [tr_x[i] + width / 2 for i in range(len(tr_x))]
+        tr_x_back = [tr_x[i] - width / 2 for i in range(len(tr_x))]
+        return tr_x_front, tr_x_back, tr_y
 
     def Failureanalysis(self):
         """"

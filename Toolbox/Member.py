@@ -40,11 +40,11 @@ class Member:
         self.segments = None
         self.arclength = None
 
+        self.xbar = None
+        self.ybar = None
         # ----------------------------------------------------------------
         # Assign failure indicators as None:
         self.BucklingFI = 0
-
-        # ----------------------------------------------------------------
 
         # ----------------------------------------------------------------
         # Dacs II: impact
@@ -88,8 +88,11 @@ class Member:
         as well as FPF
 
         more accurate is to check FPF at every segment/boom stress combination'''
-        print('-------------------------------------------------------------------------------------')
-        print('Member CSA failure analysis:')
+        # if there is a submember, the case is more complex:
+        if self.submember:
+            # find x booms in member FOR:
+            boomx = [boom.positon[0] - self.xbar for boom in self.booms]
+            # find which 
 
         normalstresses = [boom.Sigmax for boom in self.booms]
         normalforceintensities = [(stress * self.panel.h) for stress in normalstresses]
@@ -116,10 +119,6 @@ class Member:
         for loadcase in loadcases:
             self.panel.Loads = loadcase
             failureindicators_panel.append(self.panel.FailureAnalysis())
-        print('')
-        print('failure indicators for panels:')
-        print(failureindicators_panel)
-        print('')
 
         # now we check buckling: take largest abslute value for the shear load and combine it with the
         # max negative value for the normal load:
@@ -133,11 +132,7 @@ class Member:
         # Curvature must have been assigned in airfoil class!
         BucklingFI = self.BucklingAnalysis()
         self.BucklingFI = BucklingFI
-        print('loads assigned for buckling: ', self.Loads)
-        print('Buckling FI:', BucklingFI)
-        print('-------------------------------------------------------------------------------------')
         FIlist = failureindicators_panel + [BucklingFI]
-        print('all FI:', FIlist)
         return max(FIlist)
 
     def BucklingAnalysis(self):

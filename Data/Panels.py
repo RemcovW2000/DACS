@@ -19,7 +19,7 @@ Laminates = {
     'CFQIT700' : LaminateBuilder([45, -45, 0, 90], True, True, 1, 'T700'),
     'CFUDT700' : LaminateBuilder([0, 0, 0, 0], True, True, 1, 'T700'),
     'CFQIezcomposites_spreadtow' : LaminateBuilder([45, -45, 0, 90], True, True, 1, 'ezcomposites_spreadtow'),
-    'Reinforcement': LaminateBuilder([0, 0, 0, 0, 45, -45, 0, 0, 0, 0,0,0,0,0,0,0,0,0], True, True, 1, 'T700')
+    'Reinforcement': LaminateBuilder([0, 0, 0, 0, 45, -45, 0, 0, 0], True, True, 1, 'T700')
 }
 
 Sandwiches = {

@@ -2,11 +2,7 @@ import numpy as np
 import copy
 import matplotlib.pyplot as plt
 import pandas as pd
-from Fuselage import Fuselage
-from Boom import Boom 
-#from Skin import Skin 
-from Stringer import Stringer
-from Panel import Panel
+#from Skin import Skin
 from Structural_Idealization_V2 import Structural_Idealization_V2
 # ---------------------------------------------------------------------
 # Remco:

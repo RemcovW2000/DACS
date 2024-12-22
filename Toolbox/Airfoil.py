@@ -392,6 +392,11 @@ class Airfoil:
 
         self.xbar = xbar
         self.ybar = ybar
+        # pass xbar and ybar to member:
+        allmembers = self.topmembers + self.botmembers + self.sparmembers
+        for member in allmembers:
+            member.xbar = xbar
+            member.ybar = ybar
         return xbar, ybar
 
     def plotairfoil(self):
