@@ -25,6 +25,6 @@ class Panel(object):
         self.EA = 0  # Placeholder
         return self.EA
 
-    def CalculateEI(self, ybar):    # give ybar as an input
+    def calculate_EI(self, ybar):    # give ybar as an input
         self.EI = 0  # Placeholder
         return self.EI

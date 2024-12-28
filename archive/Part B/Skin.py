@@ -1,5 +1,5 @@
 import numpy as np
-from Toolbox.Laminate import LaminateBuilder
+from Toolbox.laminate import laminate_builder
 
 
 class Skin:
@@ -38,7 +38,7 @@ class Skin:
 # --------------------------------------------------
 # create laminate object
 
-Laminate_a = LaminateBuilder([0, 0, 45, 0, 0, -45, 0, 0, 45, 0, 0, -45, 0, 0, 45, 0, 0, -45, 0, 0, 45, 0, 0, -45, 0, 0, 45, 0, 0, -45, 0, 0, 45, 0, -45, 0, 90, 45, 90, 0, 90, -45, 90, 0, 90], True, True, 1)
+Laminate_a = laminate_builder([0, 0, 45, 0, 0, -45, 0, 0, 45, 0, 0, -45, 0, 0, 45, 0, 0, -45, 0, 0, 45, 0, 0, -45, 0, 0, 45, 0, 0, -45, 0, 0, 45, 0, -45, 0, 90, 45, 90, 0, 90, -45, 90, 0, 90], True, True, 1)
 # Skin 1
 Skin_compression = Skin(Laminate_a)
 
@@ -46,7 +46,7 @@ Skin_compression = Skin(Laminate_a)
 # Skin 2:
 # --------------------------------------------------
 # create laminate object
-Laminate_b = LaminateBuilder([0, 0, -45, 0, 0, 45, 0, 0, -45, 0, 0, 45, 0, 0,-45, 0, 0,+45, 0, -45, 45, 0, -45, 45, -45, 90, 0, 90, 0 , 90], True, True, 1)
+Laminate_b = laminate_builder([0, 0, -45, 0, 0, 45, 0, 0, -45, 0, 0, 45, 0, 0,-45, 0, 0,+45, 0, -45, 45, 0, -45, 45, -45, 90, 0, 90, 0 , 90], True, True, 1)
 # Skin 1
 Skin_shear = Skin(Laminate_b)
 
@@ -54,6 +54,6 @@ Skin_shear = Skin(Laminate_b)
 # Skin 3:
 # -------------------------------------------------
 # create laminate object
-Laminate_c = LaminateBuilder([ 0, 0, -45, 0, 0, 45, 0, 0, -45, 0, 0, +45, 0, 90, 0, 90], True, True, 1)
+Laminate_c = laminate_builder([ 0, 0, -45, 0, 0, 45, 0, 0, -45, 0, 0, +45, 0, 90, 0, 90], True, True, 1)
 # Skin 1
 Skin_tension = Skin(Laminate_c)

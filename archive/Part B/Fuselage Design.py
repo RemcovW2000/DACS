@@ -67,7 +67,7 @@ data_fuselage  = {'MPL': [fuselage.mpl]}
 df_fuselage    = pd.DataFrame(data_fuselage)
 
 for stringer in fuselage.stringers:
-    stringer.FailureAnalysis()
+    stringer.failure_analysis()
     failure_stringers.append(stringer.Failure)
     load_stringers_v.append(np.round(stringer.Nxv,3))
     load_stringers_h.append(np.round(stringer.Nxh,3))
@@ -80,7 +80,7 @@ for stringer in fuselage.stringers:
 df_stringers = pd.DataFrame(data_stringers)
 
 for panel in fuselage.panels:
-    panel.FailureAnalysis()
+    panel.failure_analysis()
     failure_panels.append(panel.Failure)
     load_panels_Nx.append(np.round(panel.Nx,3))
     load_panels_Ns.append(np.round(panel.Ns,3))

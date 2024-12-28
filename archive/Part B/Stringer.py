@@ -1,5 +1,5 @@
 import numpy as np
-from Toolbox.Laminate import LaminateBuilder
+from Toolbox.laminate import laminate_builder
 
 
 class Stringer:
@@ -103,7 +103,7 @@ class Stringer:
         self.EIEquivalent = EIEquivalent
         return EIEquivalent
 
-    def FailureAnalysis(self):
+    def failure_analysis(self):
         self.CalculateMemberLoads()
         # 3 failure analyses:
         # 1. First ply failure:
@@ -111,7 +111,7 @@ class Stringer:
         # Returns 2 factors, one for horizontal, one for vertical laminate
 
         # 2. Global buckling:
-        self.BucklingFI = self.BucklingAnalysis()
+        self.BucklingFI = self.buckling_analysis()
 
         # 3.
         self.CripplingFIv, self.CripplingFIh = self.CripplingAnalysis()
@@ -121,7 +121,7 @@ class Stringer:
             self.Failure = True
         return
 
-    def BucklingAnalysis(self):
+    def buckling_analysis(self):
 
         # Column buckling of just the stringer: simply supported on either side
         L = self.FrameSpacing
@@ -183,8 +183,8 @@ class Stringer:
         self.LaminateV.Loads = np.array([self.Nxv, 0, 0, 0, 0, 0])
         self.LaminateH.Loads = np.array([self.Nxh, 0, 0, 0, 0, 0])
 
-        FPFFFV = self.LaminateV.FailureAnalysis()[2]
-        FPFFFH = self.LaminateH.FailureAnalysis()[2]
+        FPFFFV = self.LaminateV.failure_analysis()[2]
+        FPFFFH = self.LaminateH.failure_analysis()[2]
 
         if self.print == True:
             print('FI for FPF, vertical, horizontal: ', np.round(FPFFFV,2), np.round(FPFFFH, 2))
@@ -195,8 +195,8 @@ class Stringer:
 # Stringer 1:
 # ----------------------------------------------------------------------------------------------
 # creating the laminate objects:
-LaminateH1 = LaminateBuilder([45, -45, 0, 0, 0, 0, 0, 0, 90], True, True, 1)
-LaminateV1 = LaminateBuilder([0, 0, 0, 0, 0, 45, -45], False, False, 1)
+LaminateH1 = laminate_builder([45, -45, 0, 0, 0, 0, 0, 0, 90], True, True, 1)
+LaminateV1 = laminate_builder([0, 0, 0, 0, 0, 45, -45], False, False, 1)
 
 TStringer_shear = Stringer(LaminateH1, LaminateV1, 20, 60)
 
@@ -205,8 +205,8 @@ TStringer_shear = Stringer(LaminateH1, LaminateV1, 20, 60)
 # Stringer 2:
 # ----------------------------------------------------------------------------------------------
 # creating the laminate object:
-LaminateH2 = LaminateBuilder([45, -45, 0, 0, 0, 0, 0, 90], True, True, 1)
-LaminateV2 = LaminateBuilder([0, 0, 0, 0, 0, 45, -45], False, False, 1)
+LaminateH2 = laminate_builder([45, -45, 0, 0, 0, 0, 0, 90], True, True, 1)
+LaminateV2 = laminate_builder([0, 0, 0, 0, 0, 45, -45], False, False, 1)
 
 TStringer_compression = Stringer(LaminateH2, LaminateV2, 30, 30)
 
@@ -214,7 +214,7 @@ TStringer_compression = Stringer(LaminateH2, LaminateV2, 30, 30)
 # Stringer 3:
 # ----------------------------------------------------------------------------------------------
 # creating the laminate object:
-LaminateH3 = LaminateBuilder([45, -45, 0, 0, 0, 0, 0, 0, 90], True, True, 1)
-LaminateV3 = LaminateBuilder([0, 0, 0, 0, 0, 45, -45], False, False, 1)
+LaminateH3 = laminate_builder([45, -45, 0, 0, 0, 0, 0, 0, 90], True, True, 1)
+LaminateV3 = laminate_builder([0, 0, 0, 0, 0, 45, -45], False, False, 1)
 
 TStringer_tension = Stringer(LaminateH3, LaminateV3, 20, 60)

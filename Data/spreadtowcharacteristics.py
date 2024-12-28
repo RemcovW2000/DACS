@@ -1,7 +1,7 @@
-from Toolbox.Lamina import Lamina
-from Toolbox.Laminate import Laminate, LaminateBuilder
+from Toolbox.lamina import Lamina
+from Toolbox.laminate import Laminate, laminate_builder
 
-laminate = LaminateBuilder([0,90], True, True, 1, 'T700')
+laminate = laminate_builder([0,90], True, True, 1, 'T700')
 laminate.Loads = [-100, 0 ,0 ,0, 0, 0]
 print(laminate.Ncrit())
 print(laminate.vxy)

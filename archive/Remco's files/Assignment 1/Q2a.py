@@ -50,7 +50,7 @@ laminas = [s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15]
 laminate = Laminate(laminas)
 
 
-E22vsE12FPF, E22vsE12LPF, S22vsS12FPF, S22vsS12LPF, Strains = laminate.ProduceFailureEnvelope(0.1)
+E22vsE12FPF, E22vsE12LPF, S22vsS12FPF, S22vsS12LPF, Strains = laminate.produce_failure_envelope(0.1)
 # Unzip the list of tuples into two lists, x and y
 Fx, Fy = zip(*S22vsS12FPF)
 Lx, Ly = zip(*S22vsS12LPF)
@@ -93,5 +93,5 @@ plt.axis('equal')
 plt.title('Stresses at which failure occurs, max stress criteria')
 plt.legend()
 plt.grid(True)
-plt.savefig('Q2a stresses, FPF, LPF, maxstress', dpi=1200)
+plt.savefig('Q2a stresses, FPF, LPF, max_stress', dpi=1200)
 plt.show()

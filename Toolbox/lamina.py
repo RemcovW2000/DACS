@@ -1,43 +1,64 @@
 import numpy as np
 import scipy.optimize as opt
-class Lamina:
-    def __init__(self, t, theta, elasticproperties, failureproperties = None, z0=None, z1=None, Sigma = None, Epsilon = None, FailureState = 0):
-        # elasticproperties format:     [E1, E2, G12, v12]
+
+from structural_entity import StructuralEntity
+class Lamina(StructuralEntity):
+    """
+    Represents a single ply of a composite laminate.
+
+    This object is used in the laminate class, which forms a stack of Lamina objects ordered in the 'laminas' list. The
+    lamina object can obtain load intensities (N/mm) either from a user directly (rare) or from a Laminate object.
+
+    Attributes:
+        t (float): Ply thickness in mm.
+        theta_ (float): Ply orientation angle in degrees, where 0 describes the lamina to be aligned with the x-axis.
+        elastic_properties (list of float): Elastic constants [E1, E2, G12, v12].
+        failure_state (int): 0 for no failure, 1 for inter-fiber failure, 2 for fiber failure.
+        elastic_properties_current (list of float): Updated elastic properties after failure.
+
+    Methods:
+        CalculateQS(): Calculates stiffness (Q) and compliance (S) matrices.
+        StressAnalysis(): Computes stress state based on current strain state.
+        FailureAnalysis(sigma): Determines the failure state of the ply.
+    """
+    def __init__(self, t, theta, elastic_properties, failureproperties = None, rho = None, z0=None, z1=None, Sigma = None, Epsilon = None, failure_state = 0):
+        super().__init__('lamina')
+        # elastic_properties format:     [E1, E2, G12, v12]
         # failureproperties format:     [E11f, v21f, msf, R11t, R11c]
         # statisticalproperties format: [E1, E2, v12, G12, Xt, Xc, Yt, Yc, S] all standard deviations
         # Damagepropagation:
-        # [0, 0.1, 0.1, 0.1] for failurestate 1
-        # [0, 0, 0, 0] for failurestate 2
+        # [0, 0.1, 0.1, 0.1] for failure_state 1
+        # [0, 0, 0, 0] for failure_state 2
         # The failure state of the lamina is 0 for an undamaged ply, and 1 for a ply that has sustained-
         # an IFF. If the ply sustains a FF or more than one IFF, the failure state is 2.
-        self.DamageProgression = np.array([[1, 1, 1, 1],
+        self.damage_progression_ = np.array([[1, 1, 1, 1],
                                            [1, 0.1, 0.1, 0.1],
                                            [1e-10, 1e-10, 1e-10, 1e-10]])
 
         # The following line determines whether the max stress criteria is used or puck:
-        self.MaxStress = False
+        self.max_stress = False
 
         # geometric properties ply
-        self.theta = theta
+        self.theta_ = theta
         self.t = t
 
         # Z coordinate of plys is assigned by the laminate class
         self.z0 = None
         self.z1 = None
 
-        # We save the original elastic properties for potential later use:
-        self.ElasticProperties = elasticproperties
+        # Now we define the elastic properties in case we want to call them right after initialisation
+        self.elastic_properties = elastic_properties
+        self.elastic_properties_current = elastic_properties
+        self.E1 = self.elastic_properties_current[0]     # Modulus of elasticity in material direction 1
+        self.E2 = self.elastic_properties_current[1]     # Modulus of elasticity in material direction 2
+        self.G12 = self.elastic_properties_current[2]    # Shear modulus in plane 12
+        self.v12 = self.elastic_properties_current[3]    # Poisson's ratio in plane 12
+
+        self.rho = rho
 
         # Then we save the current elastic properties based on the failure state:
-        self.FailureState = FailureState
-        self.ElasticPropertiesCurrent = self.DamageProgression[self.FailureState] * self.ElasticProperties
-
-        # Now we define the elastic properties in case we want to call them right after initialisation
-        self.elasticproperties = elasticproperties
-        self.E1 = self.ElasticPropertiesCurrent[0]     # Modulus of elasticity in material direction 1
-        self.E2 = self.ElasticPropertiesCurrent[1]     # Modulus of elasticity in material direction 2
-        self.G12 = self.ElasticPropertiesCurrent[2]    # Shear modulus in plane 12
-        self.v12 = self.ElasticPropertiesCurrent[3]    # Poisson's ratio in plane 12
+        self.failure_state = failure_state
+        self.elastic_properties_current = self.damage_progression_[self.failure_state] * self.elastic_properties
 
         # failure properties
         self.failureproperties = failureproperties
@@ -63,27 +84,27 @@ class Lamina:
 
 
         # Lastly we calculate the Q and S (stifness and compliance) matrices in the initialisation
-        self.CalculateQS()
+        self.calculate_QS()
 
-    def CalculateQS(self):
-        # Based on the failurestate, we should take different values for the elastic properties:
-        if self.FailureState <= 2:
-            self.ElasticPropertiesCurrent = self.DamageProgression[self.FailureState] * self.ElasticProperties
+    def calculate_QS(self):
+        # Based on the failure_state, we should take different values for the elastic properties:
+        if self.failure_state <= 2:
+            self.elastic_properties_current = self.damage_progression_[self.failure_state] * self.elastic_properties
         else:
-            # If failure state is 2 or greater we automatically overrule the damageprogression matrix-
+            # If failure state is 2 or greater we automatically overrule the damage_progression_ matrix-
             # and apply zero elastic properties
-            self.ElasticPropertiesCurrent = [1e-10, 1e-10, 1e-10, 1e-10]
+            self.elastic_properties_current = [1e-10, 1e-10, 1e-10, 1e-10]
 
         # Now we update the elastic property attributes for later use in failure criteria
-        self.E1 = self.ElasticPropertiesCurrent[0]
-        self.E2 = self.ElasticPropertiesCurrent[1]
-        self.G12 = self.ElasticPropertiesCurrent[2]
-        self.v12 = self.ElasticPropertiesCurrent[3]
+        self.E1 = self.elastic_properties_current[0]
+        self.E2 = self.elastic_properties_current[1]
+        self.G12 = self.elastic_properties_current[2]
+        self.v12 = self.elastic_properties_current[3]
         self.v21 = self.v12 * self.E2 / self.E1
 
         # Now calculating values for the Q matrix:
-        m = np.cos(np.deg2rad(self.theta))  # Cosine of the angle of the material direction 1 with the x-axis
-        n = np.sin(np.deg2rad(self.theta))  # Sine of the angle of the material direction 1 with the x-axis
+        m = np.cos(np.deg2rad(self.theta_))  # Cosine of the angle of the material direction 1 with the x-axis
+        n = np.sin(np.deg2rad(self.theta_))  # Sine of the angle of the material direction 1 with the x-axis
 
         Q = 1 - self.v12 * self.v21
         Q11 = self.E1 / Q
@@ -110,36 +131,40 @@ class Lamina:
             # it may be that the Q matrix is singular, or inversion does not work so we use the except statement
             print("Singular Q matrix")
 
-
     # We use the following method to carry out stress analysis for the laminate:
-    def StressAnalysis(self):
+    def stress_analysis(self):
         self.Sigma = np.zeros((3, 1))
         self.Sigma = self.Q @ self.Epsilon # this is the rotated sigma in the xyz frame
         return self.Sigma
 
     # Finally, we can carry out failure analysis to figure out whether a lamina has failed:
-    def FailureAnalysis(self, sigma):
-        # first we rotate the stress vector sigma by theta -> so back into 123 frame
-        m = np.cos(np.deg2rad(self.theta))
-        n = np.sin(np.deg2rad(self.theta))
+    def failure_analysis(self):
+        super().failure_analysis()
+        sigma = self.Sigma
+        # first we rotate the stress vector sigma by theta_ -> so back into 123 frame
+        m = np.cos(np.deg2rad(self.theta_))
+        n = np.sin(np.deg2rad(self.theta_))
         alfamatrix = np.array([[m**2, n**2, 2*m*n],
                                [n**2, m**2, -2*m*n],
                                [-m*n, m*n, m**2 - n**2]])
         sigma123 = alfamatrix @ sigma
 
         # Choose whether to use max stress or puck:
-        if self.MaxStress == True:
-            IFFfactor = self.IFFmax(sigma123)
-            FFfactor = self.FFmax(sigma123)
+        if self.max_stress == True:
+            IFF_factor = self.IFFmax(sigma123)
+            FF_factor = self.FFmax(sigma123)
         else:
-            IFFfactor = self.IFF(sigma123)
-            FFfactor = self.FF(sigma123)
+            IFF_factor = self.IFF(sigma123)
+            FF_factor = self.FF(sigma123)
+
+        self.set_failure_indicator('inter_fiber_failure', IFF_factor)
+        self.set_failure_indicator('fiber_failure', FF_factor)
 
         # Now we check whether either of the criteria factors are greater than one
-        if IFFfactor >= 1:
+        if IFF_factor >= 1:
             failure = 1
             self.FailureStresses.append(sigma123)
-        elif FFfactor >= 1:
+        elif FF_factor >= 1:
             failure = 2
             # We want to save the stesses at failure of a ply:
             self.FailureStresses.append(sigma123)
@@ -147,11 +172,10 @@ class Lamina:
             failure = 0
 
         # Modify the failure state based on whether failure is achieved or not
-        self.FailureState += failure
+        self.failure_state += failure
 
         # We'll return the actual factor as well, so we can use it to calculate the next loadstep:
-        return failure, IFFfactor, FFfactor
-
+        return failure, IFF_factor, FF_factor
 
     # This function does inter fiber failure analysis
     # It does not alter anything about the failure state of the material, simpy returns the factor
@@ -177,7 +201,6 @@ class Lamina:
             term2 = s2/self.Yc
             f = (term1**2 + term2**2)*(self.Yc/-s2)
         return f
-
 
     # This function does fiber failure analysis
     # It does not alter anything about the failure state of the material, simply returns the factor
@@ -218,13 +241,13 @@ class Lamina:
         return max(ftrans, fshear)
 
     # This code was used for question 1b: only for verifying the stresses found in the graphs generated with code v1
-    def CalculatePrincipalSigmaEpsilon(self):
+    def calculate_principal_sigma_epsilon(self):
         # The stress analysis is a prerequisite for this as we need to know the stresses
-        self.StressAnalysis()
+        self.stress_analysis()
 
         #Now we make a rotation matrix to rotate the stresses into the principal frame
-        m = np.cos(np.deg2rad(self.theta))
-        n = np.sin(np.deg2rad(self.theta))
+        m = np.cos(np.deg2rad(self.theta_))
+        n = np.sin(np.deg2rad(self.theta_))
 
         # Multiply global stresses by rotation matrix:
         AlfaStress = np.array([[m**2, n**2, 2*m*n],
@@ -241,7 +264,7 @@ class Lamina:
         # Return the principal stresses and strains:
         return Sigma123, Epsilon123
 
-    def delaminationanalysis(self, Taurz0, Taurz1, azimuth):
+    def delamination_analysis(self, Taurz0, Taurz1, azimuth):
         # Taurz0 = shear stress at bottom of ply
         # Taurz1 = shear stress at top of ply
 
@@ -249,7 +272,7 @@ class Lamina:
         topdelamination = False
 
         # angle between direction of stress and the 123 axis system:
-        psi = self.theta-azimuth
+        psi = self.theta_-azimuth
 
         Tau1z0 = Taurz0 * np.cos(np.deg2rad(psi))
         Tau2z0 = Taurz0 * np.sin(np.deg2rad(psi))
@@ -274,7 +297,7 @@ class Lamina:
         :param azimuth:
         :returns: scalar value for interlaminar shear strength
         """
-        psi = self.theta - azimuth
+        psi = self.theta_ - azimuth
 
         def Find0(Taur):
             term1 = Taur*np.cos(np.deg2rad(psi))/self.Sxz
@@ -291,3 +314,6 @@ class Lamina:
         Taucrit = opt.brentq(Find0, a, b)
 
         return Taucrit
+
+    def calculate_weight_per_A(self):
+        return self.t*self.rho

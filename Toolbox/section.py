@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import Normalize, TwoSlopeNorm
 from Toolbox.helperclasses import boom, segment
 
-class section:
+class Section:
     def __init__(self, members, Sx, Sy, leadingedge, trailingedge, A):
         self.members = members
         self.Sx, self.Sy = Sx, Sy
@@ -73,8 +73,8 @@ class section:
                 # find the length of each segment and add to member arc length
                 p1 = np.array(segment.p1)
                 p2 = np.array(segment.p2)
-                segmentlength = abs(np.linalg.norm(p2-p1))
-                memberarclength += segmentlength
+                segment_length = abs(np.linalg.norm(p2-p1))
+                memberarclength += segment_length
 
             member.arclength = memberarclength
 
@@ -90,17 +90,17 @@ class section:
             productlistcurrent = [(segment.qs * np.linalg.norm(np.array(segment.p2)-np.array(segment.p1))) /member.panel.h for segment in member.segments]
             productlist += productlistcurrent
 
-        integral = math.fsum(productlist)
+        integral = np.sum(productlist)
         self.int_qb_ds_over_t = integral
         return self.int_qb_ds_over_t
 
     def CalculateG(self):
-        # find the average g modulus of the cross section somehow?
+        # find the average g modulus of the cross Section somehow?
         # TODO: find correct way to calculate G modulus
         # average wrt the arc length? -> weird, it should have something to do with it's contribution to the torsional stifness.
         Glist = [member.panel.Gxy * member.arclength for member in self.members]
         Arclengthlist = [member.arclength for member in self.members]
-        self.G = sum(Glist)/sum(Arclengthlist)
+        self.G = np.sum(Glist)/np.sum(Arclengthlist)
         return self.G
 
     def CalculatePrefactor(self):
@@ -114,10 +114,10 @@ class section:
                     segment.qs += self.qs0
             self.Corrected = True
         else:
-            print('WARNING, cross section has already been corrected! Correction not carried out.')
+            print('WARNING, cross Section has already been corrected! Correction not carried out.')
         return
 
-    def PlotShearFlow(self):
+    def plot_shear_flow(self):
         allsegments = []
         for member in self.members:
             newsegments = [(segment.p1, segment.p2, segment.qs) for segment in member.segments]

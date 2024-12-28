@@ -44,5 +44,5 @@ loadingratio = np.array([[0],
                                      [0],
                                      [0],
                                      [0]])
-laminate.ProgressiveDamageAnalysis(loadingratio, 0.1)
+laminate.progressive_damage_analysis(loadingratio, 0.1)
 

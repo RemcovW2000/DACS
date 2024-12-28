@@ -1,13 +1,17 @@
-from Toolbox.Laminate import LaminateBuilder
+# External packages
+from tqdm import tqdm
 import matplotlib.pyplot as plt
 import scipy.optimize as opt
 import scipy.interpolate as interp
-from Toolbox.DamagedRegion import *
-from tqdm import tqdm
-from Toolbox.curvedplate_data import k_function
 
-class Member:
-    def __init__(self, panel, Loads = [0, 0, 0, 0, 0, 0], a = 300, b = 200):
+# Local imports
+from Toolbox.damaged_region import *
+from Toolbox.curved_plate_data import k_function
+from Toolbox.laminate import laminate_builder
+from structural_entity import StructuralEntity
+
+class Member(StructuralEntity):
+    def __init__(self, panel, loads = [0, 0, 0, 0, 0, 0], a = 300, b = 200):
         """"
         This class makes a member: either a sandwich - or laminate object, with certain dimensions:
         1. Width -> b
@@ -19,14 +23,14 @@ class Member:
 
         Damage analysis:
         1. run self.Fimpact() -> calculates force at impact
-
-
         """
-        self.panel = panel # could be either laminate or sandwich, both should work
-        self.Loads = Loads # total loads, not intensity!!!
-        self.submember = None # this is a submember for adding local reinforcement.
-        self.submember_start = None # in mm,
-        self.submember_end = None
+        super().__init__('member')
+        self.panel = panel              # could be either laminate or sandwich, both should work
+        self.Loads = loads              # total loads, not intensity!!!
+        self.submember = None           # this is a submember for adding local reinforcement.
+        self.submember_start = None     # x coordinate of the start of the submember, in airfoil FOR
+        self.submember_end = None       # x coordinate of end of the submember, in airfoil FOR
+
         # this submember is just an instance of the member class
 
         self.startcoord = [] # from leading to trailing edge for wing
@@ -42,9 +46,12 @@ class Member:
 
         self.xbar = None
         self.ybar = None
+
+        self.weight_per_b_ = None
         # ----------------------------------------------------------------
         # Assign failure indicators as None:
-        self.BucklingFI = 0
+        self.BucklingFI = None
+        self.panel_FI = None
 
         # ----------------------------------------------------------------
         # Dacs II: impact
@@ -55,7 +62,20 @@ class Member:
         self.BVID_energy = 0.113*2000/25.4 # Joules per inch -> mm thickness
         # ----------------------------------------------------------------
 
-    def Ex(self, x):
+    @property
+    def child_objects(self):
+        return [self.panel, self.submember]
+
+    def get_Ex(self, x):
+        '''
+        Function obtains the youngs modulus in the x direction for a member.
+
+        This function was implemented to correctly obtain the Ex for any member, even if it has a submember. As
+        submembers are defined by two extreme x values within which the submember is located, it takes an x coordinate
+        as an input.
+        :param x:
+        :return: Ex:
+        '''
         # function should return Ex based on value for x, whether it's in the submember or not.
         # reference point for x = 0 is the global reference point
         if self.submember:
@@ -67,7 +87,16 @@ class Member:
             Ex = self.panel.Ex
         return Ex
 
-    def h(self, x):
+    def get_h(self, x):
+        '''
+        Function obtains the thickness in the x direction for a member.
+
+        This function was implemented to correctly obtain the thickness h for any member, even if it has a submember. As
+        submembers are defined by two extreme x values within which the submember is located, it takes an x coordinate
+        as an input.
+        :param x:
+        :return: h:
+        '''
         # function should return h based on value for x, whether it's in the submember or not.
         # submember is a member type object!
         # reference point for x = 0 is the global reference point
@@ -80,62 +109,101 @@ class Member:
             h = self.panel.h
         return h
 
-    def CSA_FailureAnalysis(self):
-        ''' Point of this function is to assign the loads of the member from the cross sectional analysis -> get loads
-        from segments and booms!
+    def failure_analysis(self):
+        '''
+        This function carries out a failure analysis of the member specifically for a cross-sectional analysis (CSA).
+
+        The function uses the present booms in order to obtain the stresses of the laminate, and assigns these stresses
+        to the correct laminate (submember or full member)
 
         most conservative is to take the max shear stress and max normal stress in each member as stress state for buckling
         as well as FPF
 
-        more accurate is to check FPF at every segment/boom stress combination'''
-        # if there is a submember, the case is more complex:
-        if self.submember:
-            # find x booms in member FOR:
-            boomx = [boom.positon[0] - self.xbar for boom in self.booms]
-            # find which 
+        more accurate is to check FPF at every segment/boom stress combination
+        '''
+        super().failure_analysis()
+        # -------------------------------------------------------------------------
+        # Calculating load cases:
+        # -------------------------------------------------------------------------
+        if self.booms:
+            if self.submember:
+                submember_booms = [boom for boom in self.booms if self.submember_start < boom.location[0] + self.xbar < self.submember_end]
+                booms =[boom for boom in self.booms if self.submember_start > boom.location[0] + self.xbar or self.submember_end < boom.location[0] + self.xbar]
+                # A segment is considered in the submember if one of the booms is in the segment, such that the potentially
+                # higher stress is not counted into the main member
 
-        normalstresses = [boom.Sigmax for boom in self.booms]
-        normalforceintensities = [(stress * self.panel.h) for stress in normalstresses]
+                submember_segments = [segment for segment in self.segments if self.submember_start < min(segment.p1[0]+self.xbar, segment.p2[0]+self.xbar) and self.submember_end > max(segment.p1[0]+self.xbar, segment.p2[0]+self.xbar)]
+                segments = [segment for segment in self.segments if self.submember_start > max(segment.p1[0] + self.xbar, segment.p2[0]+self.xbar) or self.submember_end < min(segment.p1[0]+self.xbar,segment.p2[0]+self.xbar)]
 
-        # we must find the most critical stress state, which could in fact be multiple! positive or negative.
-        maxnormalstress = max(normalforceintensities)
-        minnormalstress = min(normalforceintensities)
+                self.submember.booms = submember_booms
+                self.submember.segments = submember_segments
 
-        shearflows = [segment.qs for segment in self.segments] # N/mm
+                submember_max_FI = self.submember.failure_analysis()
+            else:
+                booms = self.booms
+                segments = self.segments
 
-        # again for shear:
-        maxshearstress = max(shearflows)
-        minshearstress = min(shearflows)
+            normal_force_intensities = [(boom.Sigmax * self.get_h(boom.location[0])) for boom in booms]
 
-        # make several load cases: combining min with max etc:
-        lc1 = [maxnormalstress, 0, maxshearstress, 0, 0 ,0]
-        lc2 = [minnormalstress, 0, minshearstress, 0, 0 ,0]
-        lc3 = [maxnormalstress, 0, minshearstress, 0, 0 ,0]
-        lc4 = [minnormalstress, 0, maxshearstress, 0, 0 ,0]
-        loadcases = [lc1, lc2, lc3, lc4]
+            # we must find the most critical stress state, which could in fact be multiple! positive or negative.
+            max_normal_force_intensity = max(normal_force_intensities)
+            min_normal_force_intensity = min(normal_force_intensities)
 
-        # we have to check all loadcases for panel failure:
-        failureindicators_panel = []
-        for loadcase in loadcases:
-            self.panel.Loads = loadcase
-            failureindicators_panel.append(self.panel.FailureAnalysis())
+            shear_flows = [segment.qs for segment in segments] # N/mm
 
-        # now we check buckling: take largest abslute value for the shear load and combine it with the
-        # max negative value for the normal load:
-        maxabsindex_shear = max(enumerate(shearflows), key=lambda x: abs(x[1]))[0]
+            # again for shear:
+            max_shear_flow = max(shear_flows)
+            min_shear_flow = min(shear_flows)
 
-        maxnormal = min(normalforceintensities)
-        maxabs_shear = shearflows[maxabsindex_shear]
+            # make several load cases: combining min with max etc.:
+            extreme_load_case_1 = [max_normal_force_intensity, 0, max_shear_flow, 0, 0 ,0]
+            extreme_load_case_2 = [min_normal_force_intensity, 0, min_shear_flow, 0, 0 ,0]
+            extreme_load_case_3 = [max_normal_force_intensity, 0, min_shear_flow, 0, 0 ,0]
+            extreme_load_case_4 = [min_normal_force_intensity, 0, max_shear_flow, 0, 0 ,0]
+            loadcases = [extreme_load_case_1, extreme_load_case_2, extreme_load_case_3, extreme_load_case_4]
 
-        self.Loads = [maxnormal, 0, maxabs_shear, 0, 0 ,0]
+            # -------------------------------------------------------------------------
+            # Applying load cases to failure modes:
+            # -------------------------------------------------------------------------
 
-        # Curvature must have been assigned in airfoil class!
-        BucklingFI = self.BucklingAnalysis()
-        self.BucklingFI = BucklingFI
-        FIlist = failureindicators_panel + [BucklingFI]
-        return max(FIlist)
+            # first ply failure:
+            failureindicators_panel = []
+            for loadcase in loadcases:
+                self.panel.Loads = loadcase
+                failureindicators_panel.append(self.panel.failure_analysis())
 
-    def BucklingAnalysis(self):
+            self.panel_FI = max(failureindicators_panel)
+
+            # member buckling:
+            index_max_abs_shear = max(enumerate(shear_flows), key=lambda x: abs(x[1]))[0]
+
+            max_normal = min(normal_force_intensities)
+            max_abs_shear = shear_flows[index_max_abs_shear]
+
+            self.Loads = [max_normal * self.b, 0, max_abs_shear * self.a, 0, 0 ,0]
+
+            # Curvature must have been assigned in airfoil class!
+            Buckling_FI = self.buckling_analysis()
+            self.BucklingFI = Buckling_FI
+            FI_list = failureindicators_panel + [Buckling_FI]
+            print(failureindicators_panel, Buckling_FI)
+            max_FI = max(FI_list)
+            if self.submember:
+                FI_list.append(submember_max_FI)
+                max_FI = max(FI_list)
+
+            self.set_failure_indicator('buckling', Buckling_FI)
+            self.set_failure_indicator('child', max([max(value for key, value in
+                                                         child_object.failure_indicators.items() if
+                                                         isinstance(value, (int, float))) for child_object in
+                                                     self.child_objects if child_object]))
+        else:
+            raise TypeError('No booms exist, code for use of members outside of cross sectional analysis must be'
+                            ' finised, add a way to run both buckling and first ply failure analysis using assigned'
+                            'loads instead of loadcases derived from stress state in booms.')
+        return max(value for key, value in self.failure_indicators.items() if isinstance(value, (int, float)))
+
+    def buckling_analysis(self):
         '''
         Base function to perform the buckling analysis for the member. Loads must already be assigned!
 
@@ -165,14 +233,15 @@ class Member:
         # ------------------------------------------------------------------------------------
         # find the failure indicator:
         if self.Loads[0] > 0:
+            # TODO: add a more nuanced way to check this! shear load could still cause buckling!
             FI = 0
         else:
-            Ncritnormal = self.CombinedBucklingNcrit(self.Loads)
+            Ncritnormal = self.combined_load_buckling_Ncrit(self.Loads)
             Ncrit = scalingfactor * Ncritnormal
             FI = self.Loads[0]/Ncrit
-        return abs(FI)
+        return FI
 
-    def CombinedBucklingNcrit(self, Loads):
+    def combined_load_buckling_Ncrit(self, Loads):
         D11 = self.panel.ABD_matrix[3, 3]
         D12 = self.panel.ABD_matrix[3, 4]
         D22 = self.panel.ABD_matrix[4, 4]
@@ -183,8 +252,8 @@ class Member:
                     D11 + 2 * (D12 + 2 * D66) * (self.a / self.b) ** 2 + D22 * (
                         self.a / self.b) ** 4)
 
-        Nx = Loads[0]
-        Nxy = Loads[2]
+        Nx = Loads[0] / self.b
+        Nxy = Loads[2] / self.b
         k = Nxy/Nx
         denominator = 2 - (8192 * self.a**2 * k**2)/(81 * self.b**2 * np.pi**4)
 
@@ -192,33 +261,23 @@ class Member:
         Ncrit = abs((Ncritnorm/denominator)*term2)
 
         # Now obtain the scaling factor from the panel:
-        Ncrit = self.panel.BucklingSchalingFactor(Ncrit)
+        Ncrit = self.panel.buckling_scaling_factor(Ncrit)
         return Ncrit
 
-    def Calculate_b(self):
+    def calculate_b(self):
         x1, y1 = self.startcoord
         x2, y2 = self.endcoord
         self.b = np.sqrt((x2-x1)**2 + (y2-y1)**2)
         return self.b
 
-    def Zbcalculation(self):
+    def calculate_Zb(self):
         if self.R == None:
             self.Zb = 0
         else:
             self.Zb = np.sqrt(1-self.panel.vxy*self.panel.vyx)*self.b**2/(self.R*self.panel.h)
         return self.Zb
 
-    def kofZb(self, Zb, rovert):
-        '''
-        this function should only be used if CURVED PLATE conditions are true
-
-        Uses interpolation of curves!
-        :return:
-        '''
-        
-        return 1
-
-    def ShearBucklingFI(self):
+    def shear_load_buckling_FI(self):
         D11 = self.panel.ABD_matrix[3, 3]
         D12 = self.panel.ABD_matrix[3, 4]
         D22 = self.panel.ABD_matrix[4, 4]
@@ -230,7 +289,7 @@ class Member:
         Nxypanel = 0.78 * term1 * (term2 + term3)
         return Nxypanel
 
-    def PanelFI(self):
+    def calculate_panel_FI(self):
         """
         returns critical load in loading ratio of applied load. Load must be divided by width!
         :return:
@@ -260,7 +319,7 @@ class Member:
         Fcrit = [Fx, Fy, Fs, Mx, My, Mz]
         return Fcrit
 
-    def NormalBucklingFI(self):
+    def normal_load_buckling_FI(self):
         """
         In the current loading ratio, what is the critical load that would cause buckling?
         :return:
@@ -279,6 +338,43 @@ class Member:
         min_index = Fcrits.index(Fcrit_min)
         min_mode = min_index+1
         return Fcrit_min
+
+    def calculate_arc_length(self):
+        '''
+        Calculates the arc length of the member in the xz plane in wing level analysis.
+
+        :return: float
+        '''
+        return np.sum([np.sqrt((segment.p2[0]-segment.p1[0])**2 + (segment.p2[1]-segment.p1[1])**2) for segment in self.segments])
+
+    def calculate_weight_per_b(self):
+        '''
+        Calculates the weight per unit span of the member given the arc length of the member and the weight of the panel
+
+        :return: None
+        '''
+
+        if self.submember:
+            sub_member_segments = [segment for segment in self.segments if self.submember_start < min(segment.p1[0]+self.xbar, segment.p2[0]+self.xbar) and self.submember_end > max(segment.p1[0]+self.xbar, segment.p2[0]+self.xbar)]
+            segments = [segment for segment in self.segments if self.submember_start > max(segment.p1[0] + self.xbar, segment.p2[0]+self.xbar) or self.submember_end < min(segment.p1[0]+self.xbar,segment.p2[0]+self.xbar)]
+
+            normal_member_arc_length = np.sum([np.sqrt((segment.p2[0] - segment.p1[0]) ** 2 + (segment.p2[1] - segment.p1[1]) ** 2) for segment in
+                    segments])
+            normal_panel_weight_per_A = self.panel.calculate_weight_per_A() * normal_member_arc_length
+
+            sub_member_arc_length = np.sum([np.sqrt((segment.p2[0] - segment.p1[0]) ** 2 + (segment.p2[1] - segment.p1[1]) ** 2) for segment in
+                    sub_member_segments])
+            sub_member_panel_weight_per_A = self.submember.panel.calculate_weight_per_A()*sub_member_arc_length
+            weight_per_b = normal_panel_weight_per_A + sub_member_panel_weight_per_A
+
+        else:
+            normal_member_arc_length = np.sum([np.sqrt((segment.p2[0] - segment.p1[0]) ** 2 + (segment.p2[1] - segment.p1[1]) ** 2) for segment in
+                    self.segments])
+            normal_panel_weight_per_A = self.panel.calculate_weight_per_A() * normal_member_arc_length
+            weight_per_b = normal_panel_weight_per_A
+
+        self.weight_per_b_ = weight_per_b
+        return weight_per_b
 
     def deflection_single_term(self, F, m, n, xo, yo, x, y):
         a = self.a
@@ -317,25 +413,26 @@ class Member:
                 result += self.deflection_single_term(F, m, n, xo, yo, x, y)
         return result
 
+
 # ----------------------------------------------------------------------------------------------------------------------
 #       DACS II impact damage:
 #       Find the force:
 # ----------------------------------------------------------------------------------------------------------------------
-    def Edeflection(self, F, xo, yo):
+    def E_deflection(self, F, xo, yo):
         # For the deflection energy we analyse the work done at location of impact so
         # we need the deflection and force at place of impact:
         x = xo
         y = yo
 
         wmax = self.compute_deflection(F, xo, yo, x, y)
-        Edeflection = F*wmax/2
-        return Edeflection
+        E_deflection = F*wmax/2
+        return E_deflection
 
-    def Eindentation(self, F):
+    def E_indentation(self, F):
         k = self.k_stiffness(self.R_impactor)
         deltamax = self.calculate_deltamax(F, k)
-        Eindentation =0.4*k*(deltamax)**2.5
-        return Eindentation
+        E_indentation =0.4*k*(deltamax)**2.5
+        return E_indentation
 
     def calculate_deltamax(self, F, k):
         return (F/k)**(2/3)
@@ -372,10 +469,10 @@ class Member:
         k = 4*np.sqrt(R)/(3*np.pi*(K1 + K2))
         return k
 
-    def Eimpact_estimate(self, F, xo, yo):
-        return self.Eindentation(F) + self.Edeflection(F, xo, yo)
+    def E_impact_estimate(self, F, xo, yo):
+        return self.E_indentation(F) + self.E_deflection(F, xo, yo)
 
-    def impactforce(self, xo, yo, tol=1e-4, max_iter=1000):
+    def calculate_impactForce(self, xo, yo, tol=1e-4, max_iter=1000):
         # This function sets the attribute Fimpact and also returns the force
         Eimpact = self.BVID_energy*self.panel.h*1000
         print('BVID energy is:', np.round(Eimpact/1000, 1), 'Joules')
@@ -385,7 +482,7 @@ class Member:
 
         F = 1000 # Initial guess for F
         for i in range(max_iter):
-            E_est = self.Eimpact_estimate(F, xo, yo)
+            E_est = self.E_impact_estimate(F, xo, yo)
             diff = E_est - Eimpact
 
             if abs(diff) < tol:
@@ -397,7 +494,7 @@ class Member:
                 return F  # Found the solution within tolerance
 
             # Newton-Raphson update step
-            dE_dF = (self.Eimpact_estimate(F + tol, xo, yo) - E_est) / tol  # Numerical derivative
+            dE_dF = (self.E_impact_estimate(F + tol, xo, yo) - E_est) / tol  # Numerical derivative
             F = F - diff / dE_dF
 
             if F < 0:
@@ -407,7 +504,7 @@ class Member:
 
     def Taurz(self, r, z):
         # First run the following:
-        # 2. self.impactforce()
+        # 2. self.calculate_impactForce()
         # We don't run this everytime because it's time consuming!
         Ftotal = self.Fimpact
         Rc = self.calculate_Rc()
@@ -429,11 +526,11 @@ class Member:
         Taurz = Taumax*(1-((2*z)**2)/self.h**2)
         return Taurz
 
-    def DelaminationAnalysis(self, azimuth, rmax):
+    def delamination_analysis(self, azimuth, rmax):
         """
         Checks delaminations at a specific angle azimuth.
 
-        First run self.impactforce() -> to find the force
+        First run self.calculate_impactForce() -> to find the force
         We don't run this everytime because it's time-consuming!
 
         :param azimuth: -> angle at which we're making 'virtual cut' to look at delaminations
@@ -475,7 +572,7 @@ class Member:
 
             # However! if the current lamina has the same ply orientation as the previous (lamina below this), no delamination occurs!:
             # -> overwrite last delamination length
-            if lamina.theta == lasttheta:
+            if lamina.theta_ == lasttheta:
                 delaminationlengths[laminaindex] = 0
 
             # Only do delamination analysis if it's even possible for a delamination to occur:
@@ -488,7 +585,7 @@ class Member:
             if topdelamination_length > delaminationlengths[laminaindex + 1]:
                 delaminationlengths[laminaindex + 1] = topdelamination_length
 
-            lasttheta = lamina.theta
+            lasttheta = lamina.theta_
         return delaminationlengths
 
     def calculate_delamination_length(self, rmax, z, Taucrit, r_maxTau):
@@ -589,14 +686,14 @@ class Member:
         return MaxTaurz, max_r
 
     # Now we have to find direction in which damaged area is largest:
-    def Major_Minor_axes(self):
+    def major_minor_axes(self):
         # ----------------------------------------------------------------------------
         # finding max delamination length:
         # ----------------------------------------------------------------------------
         angles = np.arange(0, 365, 5)
         lengths_angles = []
         for angle in tqdm(angles, desc = 'Delamination at all angles:'):
-            delamination_lengths = self.DelaminationAnalysis(angle, 15)
+            delamination_lengths = self.delamination_analysis(angle, 15)
             maxdelamination_length = max(delamination_lengths)
             lengths_angles.append(maxdelamination_length)
 
@@ -619,7 +716,7 @@ class Member:
         # ax = plt.subplot(111, polar=True)
         # # ax.plot(angles_radians, lengths_angles)
         #
-        # data = [self.DelaminationAnalysis(angle, 15) for angle in angles]
+        # data = [self.delamination_analysis(angle, 15) for angle in angles]
         # # Plot each index of the returned lists
         # for i in range(len(data[0])):
         #     values = [d[i] for d in data]
@@ -636,9 +733,9 @@ class Member:
         # Return the major and minor axis directions
         return major_axis, minor_axis
 
-    def GenerateDamagedRegion(self,rmax):
+    def generate_damaged_region(self,rmax):
         # We need to make zones, and one zone has a number of delaminations:
-        delaminations = self.DelaminationAnalysis(0,  rmax)
+        delaminations = self.delamination_analysis(0,  rmax)
 
         # Now take out the zeros:
         delaminationlengths = [value for value in delaminations if value != 0.0]
@@ -652,14 +749,14 @@ class Member:
             # current length:
             zonedelaminations = [value if value >= length else 0.0 for value in delaminations]
             # Now given these lengths generate the sublaminates:
-            zone = self.GenerateZone(zonedelaminations, length)
+            zone = self.generate_zone(zonedelaminations, length)
             zones.append(zone)
 
         self.damagedregion = DamagedRegion(zones)
         return self.damagedregion
 
-    def CalculateCAI(self, knockdown, rmax):
-        self.GenerateDamagedRegion(rmax)
+    def calculate_CAI(self, knockdown, rmax):
+        self.generate_damaged_region(rmax)
         E11 = self.panel.Ex
         E22 = self.panel.Ey
         v12 = self.panel.vxy
@@ -684,11 +781,11 @@ class Member:
         SCF2 = (2 + (1 - (2 * R / w) ** 3)) / (3 * (1 - (2 * R / w))) * SCF1
         return SCF2
 
-    def GenerateZone(self, delaminationlengths, length1):
+    def generate_zone(self, delaminationlengths, length1):
         # make list of angles of the whole laminate:
         angles = []
         for lamina in self.panel.laminas:
-            angles.append(lamina.theta)
+            angles.append(lamina.theta_)
 
         # Remove the first element
         delaminationlengths = delaminationlengths[1:-1]
@@ -707,7 +804,7 @@ class Member:
 
         sublaminates = []
         for sublaminateangles in sublaminates_angleslists:
-            sublaminate = LaminateBuilder(sublaminateangles, False, False, 1)
+            sublaminate = laminate_builder(sublaminateangles, False, False, 1)
             sublaminates.append(sublaminate)
         zone = Zone(sublaminates, length1, self.panel.h)
         return zone
@@ -755,7 +852,7 @@ class Member:
         plt.legend()
         plt.show()
 
-    def plot_ForceEquilibrium(self, z, rmax):
+    def plot_force_equilibrium(self, z, rmax):
         r_values = np.linspace(0, rmax, 1000)
         Taurz_values = [self.Taurz(r, z) * r for r in r_values]
         Srz_values = [92 * r for r in r_values]

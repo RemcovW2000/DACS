@@ -1,6 +1,5 @@
 import numpy as np
 from scipy import interpolate
-import plotly.graph_objects as go
 
 # Example data points (replace these with your actual digitized data)
 data = {

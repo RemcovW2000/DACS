@@ -55,7 +55,7 @@ class MonteCarloSimulation:
         laminate.Loads = load # Assigning load to the laminate
 
         # Performing failure analysis and storing the maximum failure factor
-        failure_state, failed_laminas, maxfailfactor = laminate.FailureAnalysis()
+        failure_state, failed_laminas, maxfailfactor = laminate.failure_analysis()
         self.results.append(maxfailfactor)  # Storing the result of the simulation
 
     def run(self, load):

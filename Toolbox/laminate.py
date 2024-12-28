@@ -1,11 +1,16 @@
+# External packages
 import numpy as np
 from tqdm import tqdm
-from Toolbox.Lamina import Lamina
-from Data import MP
 import copy
 
-class Laminate:
+# Local imports
+from Toolbox.lamina import Lamina
+from Data import MP
+from structural_entity import StructuralEntity
+
+class Laminate(StructuralEntity):
     def __init__(self, laminas, Loads=None, Strains=None):
+        super().__init__('laminate')
         # laminas is a python list of lamina objects, which make up the laminate.
         # The laminate layers are ordened by the order of the list, from bottom to top.
         self.laminas = laminas
@@ -13,8 +18,8 @@ class Laminate:
         self.sandwich = False
 
         # The laminate also has a failure state, which is a list with the failure state of each lamina:
-        self.ProgressiveDamageAnalysis = False
-        self.FailureState = np.zeros(len(self.laminas))
+        self.progressive_damage_analysis = False
+        self.failure_state = np.zeros(len(self.laminas))
 
         # We calculate the thickness and find layer start and end height:
         h = 0
@@ -32,13 +37,17 @@ class Laminate:
             i.z1 = i.z1 - 0.5 * h
         self.h = h
 
-        self.stackingsequence = [lamina.theta for lamina in laminas]
+        self.stackingsequence = [lamina.theta_ for lamina in laminas]
 
         # We calculate the ABD matrix in initialisation
-        self.CalculateABD()
-        self.CalculateEquivalentProperties()
+        self.calculate_ABD()
+        self.calculate_equivalent_properties()
 
-    def CalculateABD(self):
+    @property
+    def child_objects(self):
+        return self.laminas
+
+    def calculate_ABD(self):
         # Initialize A_ij as a zero matrix
 
         # Initalizing the A, B and D matrix:
@@ -49,7 +58,7 @@ class Laminate:
         # Per lamina we calculate the three matrices
         for lamina in self.laminas:
             # First we recalculate the Q and S matrix of the lamina:
-            lamina.CalculateQS()
+            lamina.calculate_QS()
 
             # Calculate the difference (Z_k - Z_k-1)
             delta_Z = lamina.z1 - lamina.z0
@@ -81,10 +90,18 @@ class Laminate:
         except:
             print('ABD may be singular')
 
-    def CalculateStrains(self):
-        # First we RECALCULATE the ABD matrix -> this because based on the failurestate of the lamina,
+    def calculate_weight_per_A(self):
+        '''
+        Calculates the weight of the laminate per unit area based on the density and thickness of each lamina in self.lamina
+
+        :return:
+        '''
+        return sum([lamina.calculate_weight_per_A() for lamina in self.laminas])
+
+    def calculate_strains(self):
+        # First we RECALCULATE the ABD matrix -> this because based on the failure_state of the lamina,
         # They will have different Q matrices
-        self.CalculateABD()
+        self.calculate_ABD()
 
         # Then we check if the loads are assigned and calculate the strains:
         if self.Loads is not None:
@@ -95,16 +112,16 @@ class Laminate:
 
         return self.Strains
 
-    def GetStrains(self):
+    def get_strains(self):
         # This will give strains in the lamina at the 'current' state of the laminate for given loads
         # But will not change the attribute. This is a way to 'read' the strains with current failure state.
         Strains = np.linalg.inv(self.ABD_matrix) @ self.Loads
         return Strains
 
-    def CalculateLoads(self):
-        # First we RECALCULATE the ABD matrix -> this because based on the failurestate of the lamina,
+    def calculate_loads(self):
+        # First we RECALCULATE the ABD matrix -> this because based on the failure_state of the lamina,
         # They will have different Q matrices
-        self.CalculateABD()
+        self.calculate_ABD()
 
         # Then we check if the strains are assigned and calculate the strains:
         if self.Strains is not None:
@@ -114,9 +131,9 @@ class Laminate:
             print('loads is nonetype')
 
     #after calculating LAMINATE strains, we can find the strains per lamina:
-    def CalculateLaminaStrains(self):
+    def calculate_lamina_strains(self):
         # To calcualte lamina strains we first need global strainsL
-        self.CalculateStrains()
+        self.calculate_strains()
 
         Strains = self.Strains
 
@@ -129,7 +146,7 @@ class Laminate:
             max3 = max(Strains[2] - i.z0 * Strains[5], Strains[2] - i.z1 * Strains[5], key=abs)
             i.Epsilon = np.array([max1, max2, max3])
 
-    def CalculateEquivalentProperties(self):
+    def calculate_equivalent_properties(self):
         # Here we calculate the engineering constants (or equivalent properties):
         self.Ex = (self.A_matrix[0, 0] * self.A_matrix[1, 1] - self.A_matrix[0, 1] ** 2) / (self.h * self.A_matrix[1, 1])
         self.Ey = (self.A_matrix[0, 0] * self.A_matrix[1, 1] - self.A_matrix[0, 1] ** 2) / (self.h * self.A_matrix[0, 0])
@@ -148,45 +165,52 @@ class Laminate:
         v21b = -D[0, 1] / D[0, 0]
         return [self.Ex, self.Ey, self.vxy, self.vyx, self.Gxy], [E1b, E2b, G12b, v12b, v21b]
 
-    def StressAnalysis(self):
+    def stress_analysis(self):
         # We need to make sure the lamina have strains:
-        self.CalculateLaminaStrains()
+        self.calculate_lamina_strains()
 
         # we need a method to store the stresses so we can check the stresses
         shape = (3, len(self.laminas))
         stresses = np.zeros(shape)
         for count, i in enumerate(self.laminas):
-            # calling of the i.Stressanalysis() method should also save the stresses as attributes
-            stressesnonflat = i.StressAnalysis()
+            # calling of the i.stress_analysis() method should also save the stresses as attributes
+            stressesnonflat = i.stress_analysis()
             stressesflat = stressesnonflat.flatten()
             stresses[:, count] = stressesflat
         return stresses
 
     # carry out failure analysis for all lamina in laminate
-    def FailureAnalysis(self):
+    def failure_analysis(self):
+        super().failure_analysis()
         # We need to make sure the lamina have stresses:
-        self.StressAnalysis()
+        self.stress_analysis()
 
         # Initializing an array to save the failure factors:
-        FailureIndicators = []
+        failure_indicators = []
 
         # We want to potentially save the lamina which failed, not useful in this assignment though.
         for count, lamina in enumerate(self.laminas):
             # Now run for the lamina, the failure analysis
-            results = lamina.FailureAnalysis(lamina.Sigma)
-            # set the correct index of the failurestate:
-            FailureIndicators.append(max(results[1], results[2]))
+            results = lamina.failure_analysis()
+            # set the correct index of the failure_state:
+            failure_indicators.append(max(results[1], results[2]))
 
         # We save the maximum failure factor in any of the lamina, to calculate the next loadstep:
-        maxfailurefactor = max(FailureIndicators)
-        return maxfailurefactor
+        max_failure_indicator = max(failure_indicators)
+        self.set_failure_indicator('first_ply_failure', max_failure_indicator)
+        self.set_failure_indicator('child', max([max(value for key, value in
+                                                     child_object.failure_indicators.items() if
+                                                     isinstance(value, (int, float))) for child_object in
+                                                 self.child_objects]))
+        print('laminate FI:', self.failure_indicators)
+        return max(value for key, value in self.failure_indicators.items() if isinstance(value, (int, float)))
 
-    def BucklingSchalingFactor(self, Ncrit):
+    def buckling_scaling_factor(self, Ncrit):
         return Ncrit
 
-    def PDA_FailureAnalysis(self):
+    def failure_analysis_PDA(self):
         # We need to make sure the lamina have stresses:
-        self.StressAnalysis()
+        self.stress_analysis()
 
         # We make an array to track the failed lamina (which one failed):
         failedlamina = []
@@ -197,26 +221,26 @@ class Laminate:
         # We want to potentially save the lamina which failed, not useful in this assignment though.
         for count, lamina in enumerate(self.laminas):
             # Now run for the lamina, the failure analysis
-            results = lamina.FailureAnalysis(lamina.Sigma)
+            results = lamina.failure_analysis(lamina.Sigma)
 
             # If the failure of the lamina is 1 (for IFF) or 2 (for FF), the lamina has failed
             if results[0] >= 1:
                 failedlamina.append(count)
 
-            # set the correct index of the failurestate:
-            self.FailureState[count] = lamina.FailureState
+            # set the correct index of the failure_state:
+            self.failure_state[count] = lamina.failure_state
             FailureFactors.append(max(results[1], results[2]))
 
         # We save the maximum failure factor in any of the lamina, to calculate the next loadstep:
         maxfailurefactor = np.max(FailureFactors)
-        return self.FailureState, failedlamina, maxfailurefactor
+        return self.failure_state, failedlamina, maxfailurefactor
 
     def Ncrit(self):
-        maxfailurefactor = self.FailureAnalysis()
+        maxfailurefactor = self.failure_analysis()
         Ncrit = self.Loads / maxfailurefactor
         return Ncrit
 
-    def ProgressiveDamageAnalysis(self, loadingratio, loadincrement):
+    def progressive_damage_analysis(self, loadingratio, loadincrement):
         # Normalize the loading ratio
         normalized_loadingratio = loadingratio / np.max(np.abs(loadingratio))
 
@@ -236,15 +260,15 @@ class Laminate:
             self.Loads = Loads
 
             # Run the failure analysis for the laminate with this new load
-            FailureState, failedlamina, maxfailurefactor = self.PDA_FailureAnalysis()
+            failure_state, failedlamina, maxfailurefactor = self.failure_analysis_PDA()
 
             # If a lamina has failed, save these loads and strains
             if failedlamina:
                 FailureLoadsList.append(Loads)
-                FailureStrainsList.append(self.GetStrains())
+                FailureStrainsList.append(self.get_strains())
 
             # Check whether full failure of all lamina has been achieved
-            if np.all(FailureState >= 1):
+            if np.all(failure_state >= 1):
                 LPF = True
 
             if maxfailurefactor < 0.998:
@@ -265,7 +289,7 @@ class Laminate:
 
         return FailureLoads, FailureStrains
 
-    def ProduceFailureEnvelope(self, loadincrement):
+    def produce_failure_envelope(self, loadincrement):
         # We want to plot the stress and strain failure loads:
         angles = np.linspace(1, 360, 1440)
         E22vsE12FPF = []
@@ -284,7 +308,7 @@ class Laminate:
                                      [0],
                                      [0]])
 
-            FailureLoads, FailureStrains = self.ProgressiveDamageAnalysis(loadingratio, loadincrement)
+            FailureLoads, FailureStrains = self.progressive_damage_analysis(loadingratio, loadincrement)
 
             # We save the individual points as tuples: This is for one load case:
             E22vsE12 = tuple(zip(FailureStrains[1], FailureStrains[2]))
@@ -299,28 +323,22 @@ class Laminate:
             # Here we again take the FPF and LPF
             S22vsS12FPF.append(S22vsS12[0])
             S22vsS12LPF.append(S22vsS12[-1])
-            self.ResetFailureState()
+            self.reset_failure_state()
         return E22vsE12FPF, E22vsE12LPF, S22vsS12FPF, S22vsS12LPF, FailureStrainsList
 
-    def ResetFailureState(self):
+    def reset_failure_state(self):
         # First we reset the failure state vector in the laminate:
-        self.FailureState = np.zeros(len(self.laminas))
+        self.failure_state = np.zeros(len(self.laminas))
 
         # Then we also reset these in the lamina
         for lamina in self.laminas:
-            lamina.FailureState = 0
+            lamina.failure_state = 0
 
         # Lastly, we recalculate the ABD matrix:
-        self.CalculateABD()
+        self.calculate_ABD()
         return
 
-    def PrintAngles(self):
-        angles = []
-        for lamina in self.laminas:
-            angles.append(lamina.theta)
-        print(angles)
-
-    def CalculateCoreABD(self, corethickness):
+    def calculate_core_ABD(self, corethickness):
         # Initalizing the A, B and D matrix:
         A_matrix = np.zeros((3, 3))
         B_matrix = np.zeros((3, 3))
@@ -329,7 +347,7 @@ class Laminate:
         # Per lamina we calculate the three matrices
         for lamina in self.laminas:
             # First we recalculate the Q and S matrix of the lamina:
-            lamina.CalculateQS()
+            lamina.calculate_QS()
 
             # Calculate the difference (Z_k - Z_k-1)
             z1 = lamina.z1 + corethickness/2 + self.h/2
@@ -405,29 +423,29 @@ class Laminate:
         return principal_loadintensities, principal_directions
 
 
-def LaminateBuilder(angleslist,symmetry, copycenter, multiplicity, type = None):
-    if symmetry == True:
+def laminate_builder(angleslist,symmetry, copycenter, multiplicity, type = None):
+    if symmetry:
         if copycenter == True:
             angleslist = angleslist + angleslist[-1::-1]
         elif copycenter == False:
             angleslist = angleslist + angleslist[-2::-1]
-    elif symmetry == False:
+    elif not symmetry:
         angleslist = angleslist
     angleslist = angleslist * multiplicity
 
     # Define standard lamina:
-    if type == None:
-        lamina = Lamina(MP.t, 45, MP.elasticproperties, MP.failureproperties)
+    if type:
+        lamina = Lamina(MP.t, 45, MP.elastic_properties, MP.failure_properties, MP.rho)
     else:
         props = MP.CF[type]
-        lamina = Lamina(props['t'], 0, props['elasticproperties'], props['failureproperties'])
+        lamina = Lamina(props['t'], 0, props['elastic_properties'], props['failure_properties'], props['rho'])
     laminas = []
 
     # populate laminas list:
     for angle in angleslist:
         newlamina = copy.deepcopy(lamina)
-        newlamina.theta = angle
-        newlamina.CalculateQS()
+        newlamina.theta_ = angle
+        newlamina.calculate_QS()
         laminas.append(newlamina)
 
     laminate = Laminate(laminas)

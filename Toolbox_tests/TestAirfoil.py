@@ -1,7 +1,7 @@
 import unittest
 import numpy as np
-from Toolbox.Airfoil import Airfoil
-from Toolbox.Member import Member
+from Toolbox.airfoil import Airfoil
+from Toolbox.member import Member
 from Data.Panels import Laminates, Sandwiches
 
 class TestAirfoil(unittest.TestCase):
@@ -110,27 +110,27 @@ class TestAirfoil(unittest.TestCase):
     def test_top_height_at(self):
         """Test interpolation of top height at a given chordwise position."""
         x = 100
-        height = self.airfoil.Top_height_at(x)
+        height = self.airfoil.top_height_at(x)
         self.assertTrue(height > 0, "Top height should be positive.")
         self.assertIsInstance(height, float, "Top height should be a float.")
 
     def test_bot_height_at(self):
         """Test interpolation of bottom height at a given chordwise position."""
         x = 150
-        height = self.airfoil.Bot_height_at(x)
+        height = self.airfoil.bot_height_at(x)
         self.assertTrue(height <= 0, "Bottom height should be non-positive.")
         self.assertIsInstance(height, float, "Bottom height should be a float.")
 
     def test_neutral_points(self):
         """Test calculation of neutral points."""
-        xbar, ybar = self.airfoil.Neutralpoints()
+        xbar, ybar = self.airfoil.neutral_points()
         self.assertIsInstance(xbar, float, "Neutral x-coordinate should be a float.")
         self.assertIsInstance(ybar, float, "Neutral y-coordinate should be a float.")
 
     def test_neutral_points_within_bounds(self):
         """Test that the neutral points (xbar, ybar) are within reasonable bounds, namely within the airfoil section"""
         # Call the method to calculate neutral points
-        xbar, ybar = self.airfoil.Neutralpoints()
+        xbar, ybar = self.airfoil.neutral_points()
 
         max_y = max(self.airfoil.topcoordinates, key=lambda coord: coord[1])[1]
         min_y = min(self.airfoil.botcoordinates, key=lambda coord: coord[1])[1]
@@ -147,46 +147,46 @@ class TestAirfoil(unittest.TestCase):
     def test_EI_calculation(self):
         """Test calculation of bending stiffness (EI)."""
         # Ensure neutral points are calculated first
-        self.airfoil.Neutralpoints()
+        self.airfoil.neutral_points()
 
         # Now calculate bending stiffness
-        EIxx, EIyy, EIxy = self.airfoil.CalculateEI()
+        EIxx, EIyy, EIxy = self.airfoil.calculate_EI()
         self.assertTrue(EIxx > 0, "EIxx should be positive.")
         self.assertTrue(EIyy > 0, "EIyy should be positive.")
         self.assertTrue(EIxy >= 0, "EIxy should be non-negative.")
 
     def test_curvatures(self):
         """Test curvature calculations."""
-        self.airfoil.Neutralpoints()
+        self.airfoil.neutral_points()
 
         # Now calculate bending stiffness
-        self.airfoil.CalculateEI()
+        self.airfoil.calculate_EI()
         kx, ky = self.airfoil.curvatures(1000, 500)  # Example moment values
         self.assertIsInstance(kx, float, "kx should be a float.")
         self.assertIsInstance(ky, float, "ky should be a float.")
 
     def test_section_shear_flow(self):
         """Test shear flow calculations"""
-        self.airfoil.Neutralpoints()
+        self.airfoil.neutral_points()
 
         # Now calculate bending stiffness
-        self.airfoil.CalculateEI()
+        self.airfoil.calculate_EI()
 
         self.airfoil.Mx = 1000
         self.airfoil.My = 200
-        self.airfoil.SectionShearFlows(100, 50)  # Example shear force values
+        self.airfoil.section_shear_flows(100, 50)  # Example shear force values
         self.assertTrue(hasattr(self.airfoil, 'sectionlist'), "Airfoil should have a sectionlist attribute after shear flow calculation.")
         self.assertTrue(len(self.airfoil.sectionlist) == len(self.airfoil.sparlocations) + 1, "Section list should be size of sparlocations + 1.")
 
     def test_nr_of_booms(self):
-        self.airfoil.Neutralpoints()
+        self.airfoil.neutral_points()
 
         # Now calculate bending stiffness
-        self.airfoil.CalculateEI()
+        self.airfoil.calculate_EI()
 
         self.airfoil.Mx = 1000
         self.airfoil.My = 200
-        self.airfoil.SectionShearFlows(100, 50)
+        self.airfoil.section_shear_flows(100, 50)
 
     def test_no_shared_subobjects(self):
         """
@@ -201,15 +201,15 @@ class TestAirfoil(unittest.TestCase):
         self.E0, self.N0 = 0, 0 # relative to the local airfoil FOR
 
         # Functions for the normal stresses/deformations:
-        self.airfoil.Neutralpoints() # calculates neutral point
-        self.airfoil.CalculateEI() # then calculates EI around neutral point
+        self.airfoil.neutral_points() # calculates neutral point
+        self.airfoil.calculate_EI() # then calculates EI around neutral point
 
         # Functions for shear stress solving
-        self.airfoil.SectionShearFlows(self.Sx, self.Sy)
-        self.airfoil.SectionShearCorrection()
-        self.airfoil.ShearSuperPosition()
+        self.airfoil.section_shear_flows(self.Sx, self.Sy)
+        self.airfoil.section_shear_correction()
+        self.airfoil.shear_superposition()
         # we want to check the total shear force exerted by the section:
-        self.airfoil.ShearforceAnalysis()
+        self.airfoil.shear_force_analysis()
         # Collect all sub-objects into a list for comparison
         subobjects = []
 
@@ -231,15 +231,15 @@ class TestAirfoil(unittest.TestCase):
         self.E0, self.N0 = 0, 0  # relative to the local airfoil FOR
 
         # Functions for the normal stresses/deformations:
-        self.airfoil.Neutralpoints()  # calculates neutral point
-        self.airfoil.CalculateEI()  # then calculates EI around neutral point
+        self.airfoil.neutral_points()  # calculates neutral point
+        self.airfoil.calculate_EI()  # then calculates EI around neutral point
 
         # Functions for shear stress solving
-        self.airfoil.SectionShearFlows(self.Sx, self.Sy)
-        self.airfoil.SectionShearCorrection()
-        self.airfoil.ShearSuperPosition()
+        self.airfoil.section_shear_flows(self.Sx, self.Sy)
+        self.airfoil.section_shear_correction()
+        self.airfoil.shear_superposition()
         # we want to check the total shear force exerted by the section:
-        self.airfoil.ShearforceAnalysis()
+        self.airfoil.shear_force_analysis()
 
         xstarts = []
         for i, section in enumerate(self.airfoil.sectionlist):

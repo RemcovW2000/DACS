@@ -1,10 +1,10 @@
 from Data import MP
-from Toolbox.Laminate import LaminateBuilder
+from Toolbox.laminate import laminate_builder
 
 
 
-laminateshear = LaminateBuilder([90,-45, 90, 45, 90, 0], True, True, 1)
-# laminateshear = LaminateBuilder([45], False, False, 1)
+laminateshear = laminate_builder([90,-45, 90, 45, 90, 0], True, True, 1)
+# laminateshear = laminate_builder([45], False, False, 1)
 print(laminateshear.D_matrix)
 D_matrix = laminateshear.D_matrix
 D11 = D_matrix[0, 0]
@@ -20,7 +20,7 @@ print('Nxycrit = ', Nxycrit)
 weight = laminateshear.h * a * b * 3 * MP.rho
 print('weight of plate: ', weight, ' grams')
 laminateshear.Loads = [0, 0, -10, 0 ,0 ,0]
-if any(laminateshear.FailureAnalysis()[0]) >= 1:
+if any(laminateshear.failure_analysis()[0]) >= 1:
     print('first ply failure')
 
 EI_min = 225 * (
@@ -31,7 +31,7 @@ EI_min = 225 * (
 print(EI_min)
 print(EI_min/142000)
 
-laminateflange = LaminateBuilder([45,-45, 0, 0, 0], True, True, 1)
+laminateflange = laminate_builder([45,-45, 0, 0, 0], True, True, 1)
 D66 = laminateflange.D_matrix[2, 2]
 
 t = 1.35 #mm
@@ -40,12 +40,12 @@ Ftot = 10000 # newton
 Nx = Ftot/b
 # Analyse FPF for flange:
 laminateflange.Loads = [1.9*Nx, 0, 0, 0, 0, 0]
-print(laminateflange.FailureAnalysis()[0])
+print(laminateflange.failure_analysis()[0])
 
 N_xcrit = 12 * ((b / t) ** 0.717 * D66) / (1.63 * b ** 2)
 Ftot = N_xcrit*b
 print('crippling final load:', Ftot)
-laminateflange.CalculateEquivalentProperties()
+laminateflange.calculate_equivalent_properties()
 Ex = laminateflange.Ex
 
 EI = Ex*(1.35*30**3)/12

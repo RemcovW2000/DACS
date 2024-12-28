@@ -62,7 +62,7 @@ class Layup:
 
     
 class Laminate:
-    def __init__(self, type, lay_up, laminae, A, B, D, ABD, abd, Ex, Ey, Gxy, vxy, vyx, maxstresses,maxstrains, minstresses,minstrains):
+    def __init__(self, type, lay_up, laminae, A, B, D, ABD, abd, Ex, Ey, Gxy, vxy, vyx, max_stresses,maxstrains, minstresses,minstrains):
         self.type    = type           # string
         self.lay_up  = lay_up         # list
         self.laminae = laminae        # Lamina objects

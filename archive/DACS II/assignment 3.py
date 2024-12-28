@@ -3,11 +3,11 @@ import matplotlib.pyplot as plt
 from scipy.optimize import minimize_scalar
 import matplotlib.colors as mcolors
 import matplotlib.cm as cm
-from Toolbox import Lamina
-from Toolbox import Laminate
-from Toolbox.Laminate import LaminateBuilder
-laminate = LaminateBuilder([45, -45, 0, 0, 90, -45, 45], True, True, 1)
-E_theta = laminate.CalculateEquivalentProperties()[0][0]
+from Toolbox import lamina
+from Toolbox import laminate
+from Toolbox.laminate import laminate_builder
+laminate = laminate_builder([45, -45, 0, 0, 90, -45, 45], True, True, 1)
+E_theta = laminate.calculate_equivalent_properties()[0][0]
 print('E_theta = ', E_theta)
 w = 1 # width
 q1 = 1

@@ -17,14 +17,14 @@ class Panel:
         self.depth     = 0
         self.Failure   = False
 
-    def FailureAnalysis(self):
+    def failure_analysis(self):
         # first ply failure: 
         self.FPFFI = self.FPFanalysis()
         # global buckling:
-        self.BucklingFI = self.BucklingAnalysis()
+        self.BucklingFI = self.buckling_analysis()
 
         # monolithic design
-        self.MonolithicBucklingFI = self.BucklingAnalysis_MonoLithic()
+        self.MonolithicBucklingFI = self.buckling_analysis_MonoLithic()
 
         FIs = [self.FPFFI, self.BucklingFI, self.MonolithicBucklingFI]
         if any(FI > 1 for FI in FIs):
@@ -34,10 +34,10 @@ class Panel:
         # collecting loads
         self.Laminate.Loads = np.array([self.Nx, 0, self.Ns, 0, 0, 0])
         # FPF analysis
-        FPF = self.Laminate.FailureAnalysis()[2]
+        FPF = self.Laminate.failure_analysis()[2]
         return FPF
 
-    def BucklingAnalysis(self):
+    def buckling_analysis(self):
         # two solutions for Ncrit
         if self.Nx <= 1:
             D11  = self.Laminate.D_matrix[0][0]
@@ -58,7 +58,7 @@ class Panel:
         return BucklingFI
 
 
-    def BucklingAnalysis_MonoLithic(self):
+    def buckling_analysis_MonoLithic(self):
         # two solutions for Ncrit
         if self.Nx <= 1: 
             D11  = self.Laminate.D_matrix[0][0]

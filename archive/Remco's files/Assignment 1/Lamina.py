@@ -9,12 +9,12 @@ class Lamina:
         # [0, 0, 0, 0] for failurestate 2
         # The failure state of the lamina is 0 for an undamaged ply, and 1 for a ply that has sustained-
         # an IFF. If the ply sustains a FF or more than one IFF, the failure state is 2.
-        self.DamageProgression = np.array([[1, 1, 1, 1],
+        self.damage_progression_ = np.array([[1, 1, 1, 1],
                                            [1, 0.1, 0.1, 0.1],
                                            [1e-10, 1e-10, 1e-10, 1e-10]])
 
         # The following line determines whether the max stress criteria is used or puck:
-        self.MaxStress = True
+        self.max_stress = True
 
         # geometric properties ply
         self.theta = theta
@@ -29,7 +29,7 @@ class Lamina:
 
         # Then we save the current elastic properties based on the failure state:
         self.FailureState = FailureState
-        self.ElasticPropertiesCurrent = self.DamageProgression[self.FailureState] * self.ElasticProperties
+        self.ElasticPropertiesCurrent = self.damage_progression_[self.FailureState] * self.ElasticProperties
 
         # Now we define the elastic properties in case we want to call them right after initialisation
         self.elasticproperties = elasticproperties
@@ -59,14 +59,14 @@ class Lamina:
         self.theta_rad = np.radians(theta)
 
         # Lastly we calculate the Q and S (stifness and compliance) matrices in the initialisation
-        self.CalculateQS()
+        self.calculate_QS()
 
-    def CalculateQS(self):
+    def calculate_QS(self):
         # Based on the failurestate, we should take different values for the elastic properties:
         if self.FailureState <= 2:
-            self.ElasticPropertiesCurrent = self.DamageProgression[self.FailureState] * self.ElasticProperties
+            self.ElasticPropertiesCurrent = self.damage_progression_[self.FailureState] * self.ElasticProperties
         else:
-            # If failure state is 2 or greater we automatically overrule the damageprogression matrix-
+            # If failure state is 2 or greater we automatically overrule the damage_progression_ matrix-
             # and apply zero elastic properties
             self.ElasticPropertiesCurrent = [1e-10, 1e-10, 1e-10, 1e-10]
 
@@ -108,13 +108,13 @@ class Lamina:
 
 
     # We use the following method to carry out stress analysis for the laminate:
-    def StressAnalysis(self):
+    def stress_analysis(self):
         self.Sigma = np.zeros((3, 1))
         self.Sigma = self.Q @ self.Epsilon # this is the rotated sigma in the xyz frame
         return self.Sigma
 
     # Finally, we can carry out failure analysis to figure out whether a lamina has failed:
-    def FailureAnalysis(self, sigma):
+    def failure_analysis(self, sigma):
         # first we rotate the stress vector sigma by theta -> so back into 123 frame
         m = np.cos(self.theta_rad)
         n = np.sin(self.theta_rad)
@@ -124,7 +124,7 @@ class Lamina:
         sigma123 = alfamatrix @ sigma
 
         # Choose whether to use max stress or puck:
-        if self.MaxStress == True:
+        if self.max_stress == True:
             IFFfactor = self.IFFmax(sigma123)
             FFfactor = self.FFmax(sigma123)
         else:
@@ -214,9 +214,9 @@ class Lamina:
         return max(ftrans, fshear)
 
     # This code was used for question 1b: only for verifying the stresses found in the graphs generated with code v1
-    def CalculatePrincipalSigmaEpsilon(self):
+    def calculate_principal_sigma_epsilon(self):
         # The stress analysis is a prerequisite for this as we need to know the stresses
-        self.StressAnalysis()
+        self.stress_analysis()
 
         #Now we make a rotation matrix to rotate the stresses into the principal frame
         m = np.cos(self.theta_rad)

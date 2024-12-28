@@ -1,10 +1,10 @@
 import numpy as np
 import copy
 from Data import MP
-from Toolbox.Laminate import LaminateBuilder
-from Toolbox.Sandwich import Sandwich, Core, Member
+from Toolbox.laminate import laminate_builder
+from Toolbox.sandwich import Sandwich, Core, Member
 
-laminate1 = LaminateBuilder([45, -45, 45, -45], True, False, 1)
+laminate1 = laminate_builder([45, -45, 45, -45], True, False, 1)
 laminate2 = copy.deepcopy(laminate1)
 
 thickness = 10 #mm
@@ -20,6 +20,6 @@ sandwich = Sandwich(laminate1, laminate2, core, Loads)
 Member = Member(sandwich, Loads, a, b)
 print(np.round(Member.ShearBucklingFF(), 2), 'N/mm')
 np.set_printoptions(precision=1, suppress=False)
-print(sandwich.SandwichWrinkingShear())
+print(sandwich.shear_load_wrinkling_Ncrit())
 print('ABD Matrix of sandwich:')
 print(sandwich.ABD_matrix)

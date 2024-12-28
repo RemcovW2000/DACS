@@ -39,11 +39,11 @@ laminate = Laminate(laminas)
 laminate.Loads = np.array([[0.02], [18], [0], [18000], [0], [0]])
 
 # First we have to calculate strains:
-laminate.CalculateLaminaStrains()
+laminate.calculate_lamina_strains()
 
 # Now we print the stresses and strains
-print('S0: ',s0.CalculatePrincipalSigmaEpsilon())
-print('S1: ',s1.CalculatePrincipalSigmaEpsilon())
-print('S2: ', s2.CalculatePrincipalSigmaEpsilon())
-print('S3: ', s3.CalculatePrincipalSigmaEpsilon())
-print('S4: ', s4.CalculatePrincipalSigmaEpsilon())
+print('S0: ',s0.calculate_principal_sigma_epsilon())
+print('S1: ',s1.calculate_principal_sigma_epsilon())
+print('S2: ', s2.calculate_principal_sigma_epsilon())
+print('S3: ', s3.calculate_principal_sigma_epsilon())
+print('S4: ', s4.calculate_principal_sigma_epsilon())

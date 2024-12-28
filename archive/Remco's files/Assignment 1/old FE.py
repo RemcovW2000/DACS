@@ -68,10 +68,10 @@ for angle in tqdm(angles):
                              [0]])
 
     # Then we calulate the FPF and LPF load:
-    FailureLoads, FailureStrains = laminate.ProgressiveDamageAnalysis(loadingratio, 0.1)
+    FailureLoads, FailureStrains = laminate.progressive_damage_analysis(loadingratio, 0.1)
 
     # Finally we have to reset the failurestate of the laminate:
-    laminate.ResetFailureState()
+    laminate.reset_failure_state()
 
     # Now we need to plot the global failure strains, we'll plot the shear and transverse strain (row 1 and 2)
     Failure_shear_strains = np.append(Failure_shear_strains, FailureStrains[1])

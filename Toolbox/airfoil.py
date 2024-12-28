@@ -1,20 +1,22 @@
-import copy
 
-import numpy as np
+# External packages
+import copy
 import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from Data.Airfoils import airfoilcoords
-from scipy.interpolate import interp1d
-from Toolbox.Laminate import LaminateBuilder
-import matplotlib.pyplot as plt
-from Toolbox.DamagedRegion import *
-from Toolbox.Member import Member
-from matplotlib.colors import Normalize, TwoSlopeNorm
 from scipy.linalg import lstsq
-import math
-from Toolbox.section import section
+from scipy.interpolate import interp1d
+import matplotlib.pyplot as plt
+from matplotlib.colors import Normalize, TwoSlopeNorm
+
+# Local imports
+from Data.Airfoils import airfoilcoords
+from Toolbox.laminate import laminate_builder
+from Toolbox.damaged_region import *
+from Toolbox.member import Member
+from Toolbox.section import Section
 from Toolbox.helperclasses import boom, segment
+from structural_entity import StructuralEntity
 
 '''
 Shear flow has to be fixed,
@@ -26,16 +28,22 @@ segments p1 and p2 are defined
 the sign of qs may not by definition coincide with the direction of the segment (from p1 to p2)
 '''
 
-class Airfoil:
-    def __init__(self, airfoilname, thickness, chordlength, sparlocations, topmembers, botmembers, sparmembers, trpanel = None, trstart = None, trend = None, brpanel = None, brstart = None, brend = None):
+class Airfoil(StructuralEntity):
+    """
+        Represents an airfoil for structural analysis.
+
+        Attributes:
+            chord_length (float): Length of the chord (m).
+        """
+    def __init__(self, airfoil_name, thickness, chord_length, spar_locations, top_members, bot_members, spar_members, trpanel = None, trstart = None, trend = None, brpanel = None, brstart = None, brend = None):
         """
         We make the assumption that the laminate does not change within a member!
         For now we'll assume the whole structure is sandwich panel?
 
-        :param sparlocations: locations from LE to TE of spars
-        :param airfoilname:
+        :param spar_locations: locations from LE to TE of spars
+        :param airfoil_name_:
         :param thickness:
-        :param chordlength:
+        :param chord_length:
         :param Cl:
         :param moments:
         - list of moments -> there are 2, around both the x and y axis
@@ -47,23 +55,25 @@ class Airfoil:
         :params trstart, trend, brstart, brend: top- and bottom reinforcement start and en points, in mm from the leading
         edge
         """
+        super().__init__('airfoil')
+
         self.print = False
         self.plot = False
-        self.airfoilname = airfoilname
+        self.airfoil_name_ = airfoil_name
         self.thickness = thickness
-        self.chordlength = chordlength
+        self.chord_length = chord_length
 
-        self.topmembers = topmembers
-        self.botmembers = botmembers
-        self.members = topmembers + botmembers
+        self.top_members = top_members
+        self.bot_members = bot_members
+        self.members = top_members + bot_members
 
         # make coordinates:
-        self.topcoordinates_base = airfoilcoords[airfoilname]['top']
-        self.bottomcoordinates_base = airfoilcoords[airfoilname]['bottom']
+        self.top_coordinates_base = airfoilcoords[airfoil_name]['top']
+        self.bot_coordinates_base = airfoilcoords[airfoil_name]['bottom']
         self.top_bot_coordinates()
 
-        self.sparlocations = sparlocations
-        self.sparmembers = sparmembers
+        self.spar_locations = spar_locations
+        self.spar_members = spar_members
 
         # reinforcement data:
         self.trpanel = trpanel
@@ -73,7 +83,7 @@ class Airfoil:
         self.brstart = brstart
         self.brend = brend
 
-        self.segmentlength = 1 #length of segments in mm
+        self.segment_length = 1 #length of segments in mm
         self.structuralidealisation = False
         self.Mx = 0
         self.My = 0
@@ -90,20 +100,26 @@ class Airfoil:
         self.EIxy = None
 
         # find the member locations upon initialisation: startcoord, endcoord, etc:
-        self.FindMemberLocations()
+        self.find_member_locations()
         # assign the submembers to the members which have reinforcement:
-        self.assignsubmembers()
+        self.assign_submembers()
+
+        self.y = None
 
 # ------------------------------------------------------------------------------------------------------
 # Helper functions, not called in the algorithms directly, but in functions
 
+    @property
+    def child_objects(self):
+        return self.top_members + self.bot_members + self.spar_members
+
     def top_bot_coordinates(self):
         # transform the coordinates as neccesary:
-        topcoordinates = self.topcoordinates_base
-        botcoordinates = self.bottomcoordinates_base
+        topcoordinates = self.top_coordinates_base
+        botcoordinates = self.bot_coordinates_base
 
-        topcoordinates = [[element * self.chordlength for element in sublist] for sublist in topcoordinates]
-        botcoordinates = [[element * self.chordlength for element in sublist] for sublist in botcoordinates]
+        topcoordinates = [[element * self.chord_length for element in sublist] for sublist in topcoordinates]
+        botcoordinates = [[element * self.chord_length for element in sublist] for sublist in botcoordinates]
         self.topcoordinates = topcoordinates
         self.botcoordinates = botcoordinates
 
@@ -132,56 +148,56 @@ class Airfoil:
 
         return abs(area) / 2.0
 
-    def FindMemberLocations(self):
+    def find_member_locations(self):
         # assign the width of the members based on the locations of the ribs
-        for i, member in enumerate(self.botmembers):
+        for i, member in enumerate(self.bot_members):
             if i == 0:
                 member.startcoord = [0, 0]
-                member.endcoord = [self.sparlocations[i], self.Bot_height_at(self.sparlocations[i])]
-            elif i == len(self.botmembers) - 1:
+                member.endcoord = [self.spar_locations[i], self.bot_height_at(self.spar_locations[i])]
+            elif i == len(self.bot_members) - 1:
                 # last member:
-                member.startcoord = [self.sparlocations[i - 1], self.Bot_height_at(self.sparlocations[i - 1])]
-                member.endcoord = [self.chordlength, 0]
+                member.startcoord = [self.spar_locations[i - 1], self.bot_height_at(self.spar_locations[i - 1])]
+                member.endcoord = [self.chord_length, 0]
             else:
-                member.startcoord = [self.sparlocations[i - 1], self.Bot_height_at(self.sparlocations[i - 1])]
-                member.endcoord = [self.sparlocations[i], self.Bot_height_at(self.sparlocations[i])]
-            member.Calculate_b()
+                member.startcoord = [self.spar_locations[i - 1], self.bot_height_at(self.spar_locations[i - 1])]
+                member.endcoord = [self.spar_locations[i], self.bot_height_at(self.spar_locations[i])]
+            member.calculate_b()
 
-        for i, member in enumerate(self.topmembers):
+        for i, member in enumerate(self.top_members):
             if i == 0:
                 member.startcoord = [0, 0]
-                member.endcoord = [self.sparlocations[i], self.Top_height_at(self.sparlocations[i])]
-            elif i == len(self.botmembers) - 1:
+                member.endcoord = [self.spar_locations[i], self.top_height_at(self.spar_locations[i])]
+            elif i == len(self.bot_members) - 1:
                 # last member:
-                member.startcoord = [self.sparlocations[i - 1], self.Top_height_at(self.sparlocations[i - 1])]
-                member.endcoord = [self.chordlength, 0]
+                member.startcoord = [self.spar_locations[i - 1], self.top_height_at(self.spar_locations[i - 1])]
+                member.endcoord = [self.chord_length, 0]
             else:
-                member.startcoord = [self.sparlocations[i - 1], self.Top_height_at(self.sparlocations[i - 1])]
-                member.endcoord = [self.sparlocations[i], self.Top_height_at(self.sparlocations[i])]
-            member.Calculate_b()
+                member.startcoord = [self.spar_locations[i - 1], self.top_height_at(self.spar_locations[i - 1])]
+                member.endcoord = [self.spar_locations[i], self.top_height_at(self.spar_locations[i])]
+            member.calculate_b()
 
-        for i, member in enumerate(self.sparmembers):
-            member.startcoord = [self.sparlocations[i], self.Top_height_at(self.sparlocations[i])]
-            member.endcoord = [self.sparlocations[i], self.Bot_height_at(self.sparlocations[i])]
+        for i, member in enumerate(self.spar_members):
+            member.startcoord = [self.spar_locations[i], self.top_height_at(self.spar_locations[i])]
+            member.endcoord = [self.spar_locations[i], self.bot_height_at(self.spar_locations[i])]
         return
 
-    def Top_height_at(self, x):
+    def top_height_at(self, x):
         xlist = [point[0] for point in self.topcoordinates]
         ylist = [point[1] for point in self.topcoordinates]
         top_interp = interp1d(xlist, ylist, kind='linear', bounds_error=False, fill_value="extrapolate")
         return float(top_interp(x))
 
-    def Bot_height_at(self, x):
+    def bot_height_at(self, x):
         xlist = [point[0] for point in self.botcoordinates]
         ylist = [point[1] for point in self.botcoordinates]
         bot_interp = interp1d(xlist, ylist, kind='linear', bounds_error=False, fill_value="extrapolate")
         return float(bot_interp(x))
 
-    def Top_height_at_neutralax(self, x):
-        return self.Top_height_at(x) - self.ybar
+    def top_height_at_neutralax(self, x):
+        return self.top_height_at(x) - self.ybar
 
-    def Bottom_height_at_neutralax(self, x):
-        return self.Bot_height_at(x) - self.ybar
+    def bot_height_at_neutralax(self, x):
+        return self.bot_height_at(x) - self.ybar
 
     def segment_I(self, t, P1, P2):
         """"
@@ -233,7 +249,7 @@ class Airfoil:
 # ------------------------------------------------------------------------------------------------------
 # Algorithm functions, called directly in the sequence for cross sectional analysis
 
-    def assignsubmembers(self):
+    def assign_submembers(self):
         """
         This function makes submembers and assigns them to the correct members:
         :return:
@@ -241,15 +257,13 @@ class Airfoil:
 
         # -> check if there is even a reinforcement
         if self.trpanel:
-            # print(self.trpanel)
-            # print(self.trstart)
-            # this means there is a top reinforcement!
-            for member in self.topmembers:
+            for member in self.top_members:
                 # for each member, see if the member contains a submember:
                 # if the member contains reinforcement:
                 if member.startcoord[0] < self.trstart < member.endcoord[0]:
                     # this means the start is in the member, is the end in?
                     member.submember = self.trpanel
+                    member.child_objects.append(self.trpanel)
                     if member.endcoord[0] > self.trend:
                         # this means the end is also in the member, assign member submember:
                         member.submember_start = self.trstart
@@ -268,12 +282,13 @@ class Airfoil:
 
         if self.brpanel:
             # this means there is a top reinforcement!
-            for member in self.botmembers:
+            for member in self.bot_members:
                 # for each member, see if the member contains a submember:
                 # if the member contains reinforcement:
                 if member.startcoord[0] < self.brstart < member.endcoord[0]:
                     # this means the start is in the member, is the end in?
                     member.submember = self.brpanel
+                    member.child_objects.append(self.brpanel)
                     if member.endcoord[0] > self.brend:
                         # this means the end is also in the member, assign member submember:
                         member.submember_start = self.brstart
@@ -289,18 +304,19 @@ class Airfoil:
                     member.submember = self.brpanel
                     member.submember_start = member.startcoord[0]
                     member.submember_end = self.brend
+
         if self.print:
             print('--------------------------------------------------------------------------------')
             print('Member reinforcements:')
-            print('Topmembers:')
-            for member in self.topmembers:
+            print('top_members:')
+            for member in self.top_members:
                 print('start and end coordinates of member:')
                 print(member.startcoord, member.endcoord)
                 print('start and end x coordinates of reinforcement:')
                 print(member.submember_start, member.submember_end)
                 print('--------------------------------------------------------------------------------')
-            print('Botmembers:')
-            for member in self.botmembers:
+            print('bot_members:')
+            for member in self.bot_members:
                 print('start and end coordinates of member:')
                 print(member.startcoord, member.endcoord)
                 print('start and end x coordinates of reinforcement:')
@@ -308,30 +324,30 @@ class Airfoil:
                 print('--------------------------------------------------------------------------------')
         return
 
-    def Neutralpoints(self):
+    def neutral_points(self):
         # find the neutral points -> x and y coordinate of neutral axes around x and y axes:
         EAytot = 0
         EAxtot = 0
         EAtot = 0
-        for member in self.topmembers:
+        for member in self.top_members:
             npoints = 10  # TODO: placeholder!
 
-            # in the topmembers list, we know the start and end coordinates:
+            # in the top_members list, we know the start and end coordinates:
             xlist = np.linspace(member.startcoord[0], member.endcoord[0], npoints)
             for i, x in enumerate(xlist):
                 if i == len(xlist) - 1:
                     break
                 elif x == 0:
                     p1 = [0, 0]
-                    p2 = [xlist[i + 1], self.Top_height_at(xlist[i + 1])]
+                    p2 = [xlist[i + 1], self.top_height_at(xlist[i + 1])]
                 else:
                     # we have 1 point now:
-                    p1 = [x, self.Top_height_at(x)]
-                    p2 = [xlist[i + 1], self.Top_height_at(xlist[i + 1])]
+                    p1 = [x, self.top_height_at(x)]
+                    p2 = [xlist[i + 1], self.top_height_at(xlist[i + 1])]
 
                 # given these 2 points we can find EA eq and distance:
                 Dl = np.sqrt((p1[0] - p2[0]) ** 2 + (p1[1] - p2[1]) ** 2)
-                EA = Dl * member.h(x) * member.Ex(x)
+                EA = Dl * member.get_h(x) * member.get_Ex(x)
                 Dx = (p1[0] + p2[0]) / 2
                 Dy = (p1[1] + p2[1]) / 2
 
@@ -342,25 +358,25 @@ class Airfoil:
                 EAxtot += EAx
                 EAtot += EA
 
-        for member in self.botmembers:
+        for member in self.bot_members:
             npoints = 10  # TODO: placeholder!
 
-            # in the topmembers list, we know the start and end coordinates:
+            # in the top_members list, we know the start and end coordinates:
             xlist = np.linspace(member.startcoord[0], member.endcoord[0], npoints)
             for i, x in enumerate(xlist):
                 if i == len(xlist) - 1:
                     break
                 elif x == 0:
                     p1 = [0, 0]
-                    p2 = [xlist[i + 1], self.Bot_height_at(xlist[i + 1])]
+                    p2 = [xlist[i + 1], self.bot_height_at(xlist[i + 1])]
                 else:
                     # we have 1 point now:
-                    p1 = [x, self.Bot_height_at(x)]
-                    p2 = [xlist[i + 1], self.Bot_height_at(xlist[i + 1])]
+                    p1 = [x, self.bot_height_at(x)]
+                    p2 = [xlist[i + 1], self.bot_height_at(xlist[i + 1])]
 
                 # given these 2 points we can find EA eq and distance:
                 Dl = np.sqrt((p1[0] - p2[0]) ** 2 + (p1[1] - p2[1]) ** 2)
-                EA = Dl * member.h(x) * member.Ex(x)
+                EA = Dl * member.get_h(x) * member.get_Ex(x)
                 Dx = (p1[0] + p2[0]) / 2
                 Dy = (p1[1] + p2[1]) / 2
 
@@ -371,11 +387,11 @@ class Airfoil:
                 EAxtot += EAx
                 EAtot += EA
 
-        for i, member in enumerate(self.sparmembers):
+        for i, member in enumerate(self.spar_members):
             # Spars are vertical:
-            x = self.sparlocations[i]
-            top = self.Top_height_at(x)
-            bot = self.Bot_height_at(x)
+            x = self.spar_locations[i]
+            top = self.top_height_at(x)
+            bot = self.bot_height_at(x)
 
             # avg height:
             y = (top + bot) / 2
@@ -393,22 +409,23 @@ class Airfoil:
         self.xbar = xbar
         self.ybar = ybar
         # pass xbar and ybar to member:
-        allmembers = self.topmembers + self.botmembers + self.sparmembers
+        allmembers = self.top_members + self.bot_members + self.spar_members
+
         for member in allmembers:
             member.xbar = xbar
             member.ybar = ybar
         return xbar, ybar
 
-    def plotairfoil(self):
+    def plot_airfoil(self):
 
         # Coloring inside of the airfoil:
-        xlist = np.linspace(0.1, self.chordlength, 100)
-        top = [self.Top_height_at(x) for x in xlist]
-        bot = [self.Bot_height_at(x) for x in xlist]
+        xlist = np.linspace(0.1, self.chord_length, 100)
+        top = [self.top_height_at(x) for x in xlist]
+        bot = [self.bot_height_at(x) for x in xlist]
 
 
         plt.figure(figsize=(10, 6))
-        plt.fill_between(np.linspace(0, self.chordlength, len(xlist)), top, bot,
+        plt.fill_between(np.linspace(0, self.chord_length, len(xlist)), top, bot,
                          color='lightblue', alpha=0.5)
         def plotmembers(memberlist, color, label=None):
             for idx, member in enumerate(memberlist):
@@ -429,23 +446,23 @@ class Airfoil:
             return
 
         # Plotting top members:
-        plotmembers(self.topmembers, 'orange', label='Top Members')
+        plotmembers(self.top_members, 'orange', label='Top Members')
 
         # Plotting bottom members:
-        plotmembers(self.botmembers, 'blue', label='Bottom Members')
+        plotmembers(self.bot_members, 'blue', label='Bottom Members')
 
         # Plotting spar members:
-        plotmembers(self.sparmembers, 'green', label='Spar Members')
+        plotmembers(self.spar_members, 'green', label='Spar Members')
 
         # plot reinforcement:
         if self.trpanel:
             trxlist = np.linspace(self.trstart, self.trend, 20)
-            trylist = [self.Top_height_at(x) for x in trxlist]
+            trylist = [self.top_height_at(x) for x in trxlist]
             plt.plot(trxlist, trylist, label='Top reinforcement', color='black', linewidth=2)
 
         if self.brpanel:
             brxlist = np.linspace(self.brstart, self.brend, 20)
-            brylist = [self.Bot_height_at(x) for x in brxlist]
+            brylist = [self.bot_height_at(x) for x in brxlist]
             plt.plot(brxlist, brylist, label='Bottom reinforcement', color='black', linewidth=2)
 
         plt.axhline(y=self.ybar, linestyle='--', label = 'neutral bending axis')
@@ -458,21 +475,31 @@ class Airfoil:
         plt.grid(True)
         return plt
 
-    def CalculateEI(self):
+    def calculate_EI(self):
+        '''
+        Calculates the 2nd moment of inertia (I) multiplied by the local Young's modulus (E),
+        which is dependent on the particular laminate at that point.
+
+        :return: A tuple containing the total EI values in the x, y, and xy directions.
+                 - EIxx: Total EI in the x-direction.
+                 - EIyy: Total EI in the y-direction.
+                 - EIxy: Total EI in the xy-direction.
+        :rtype: tuple of float
+        '''
         if self.xbar is None or self.ybar is None:
             raise ValueError(
-                "Neutral points (xbar, ybar) must be calculated before calculating EI. Call Neutralpoints() first.")
+                "Neutral points (xbar, ybar) must be calculated before calculating EI. Call neutral_points() first.")
         # for bot and top members we have a function:
-        EIxxt, EIyyt, EIxyt = self.EI(self.topmembers, 100, 'top')
-        EIxxb, EIyyb, EIxyb = self.EI(self.botmembers, 100, 'bot')
+        EIxxt, EIyyt, EIxyt = self.calculate_EI_memberlist(self.top_members, 100, 'top')
+        EIxxb, EIyyb, EIxyb = self.calculate_EI_memberlist(self.bot_members, 100, 'bot')
 
         # for the spars we do the following:
         EIxxs = 0
         EIyys = 0
         EIxys = 0
-        for member in self.sparmembers:
-            Ixx, Iyy, Ixy = self.segment_I(member.panel.h, member.startcoord, member.endcoord) # no reinforcement so no need for member.Ex(x)
-            EIxx = Ixx * member.panel.Ex # no reinforcement in spar so no need for member.Ex(x)
+        for member in self.spar_members:
+            Ixx, Iyy, Ixy = self.segment_I(member.panel.h, member.startcoord, member.endcoord) # no reinforcement so no need for member.get_Ex(x)
+            EIxx = Ixx * member.panel.Ex # no reinforcement in spar so no need for member.get_Ex(x)
             EIyy = Iyy * member.panel.Ex # no reinforcement in spar
             EIxy = Ixy * member.panel.Ex # no reinforcement in spar
             EIxxs += EIxx
@@ -484,13 +511,21 @@ class Airfoil:
         self.EIxy = EIxyt + EIxyb + EIxys
         return EIxxt + EIxxb, EIyyt + EIyyb, EIxyt + EIxyb
 
-    def EI(self, memberlist, npoints, side):
+    def calculate_EI_memberlist(self, memberlist, npoints, side):
+        '''
+        Given a list of member objects, function calculates the 2nd moment of inertia (I) multiplied by the local
+        Young's modulus (E), segment wise.
+
+        :return: A tuple containing the total EI values in the x, y, and xy directions.
+                 - EIxx: Total EI in the x-direction.
+                 - EIyy: Total EI in the y-direction.
+                 - EIxy: Total EI in the xy-direction.
+        :rtype: tuple of float
+        '''
         EIxx, EIyy, EIxy = 0, 0, 0
         for member in memberlist:
-            # in the topmembers list, we know the start and end coordinates:
             xlist = np.linspace(member.startcoord[0], member.endcoord[0], npoints)
 
-            # now we need to find whether the member has a submember:
             if member.submember:
                 # if so, we need the start and end points of the submember:
 
@@ -513,17 +548,17 @@ class Airfoil:
                     break
                 else:
                     # find the points with respect to neutral axes:
-                    p1 = [x - self.xbar, self.Top_height_at_neutralax(x) if side == 'top' else self.Bottom_height_at_neutralax(x)]
-                    p2 = [xlist[i + 1] - self.xbar, self.Top_height_at_neutralax(xlist[i + 1]) if side == 'top' else self.Bottom_height_at_neutralax(xlist[i + 1])]
+                    p1 = [x - self.xbar, self.top_height_at_neutralax(x) if side == 'top' else self.bot_height_at_neutralax(x)]
+                    p2 = [xlist[i + 1] - self.xbar, self.top_height_at_neutralax(xlist[i + 1]) if side == 'top' else self.bot_height_at_neutralax(xlist[i + 1])]
                     # line segment starts at x and ends at x + 1
 
-                Ilist = self.segment_I(member.h(x), p1, p2)
-                EIxx += Ilist[0]*member.Ex(x)
-                EIyy += Ilist[1]*member.Ex(x)
-                EIxy += Ilist[2]*member.Ex(x)
+                Ilist = self.segment_I(member.get_h(x), p1, p2)
+                EIxx += Ilist[0]*member.get_Ex(x)
+                EIyy += Ilist[1]*member.get_Ex(x)
+                EIxy += Ilist[2]*member.get_Ex(x)
         return EIxx, EIyy, EIxy
 
-    def curvatures(self, Mx, My):
+    def calculate_curvatures(self, Mx, My):
         EIxx = self.EIxx
         EIyy = self.EIyy
         EIxy = self.EIxy
@@ -531,25 +566,17 @@ class Airfoil:
         ky = (My * EIxx - Mx * EIxy) / (EIxx * EIyy - EIxy ** 2)
         return kx, ky
 
-    def AxialStrain(self, kx, ky, x, y):
-        '''
-        Calculates strain
-        coordinates around the CENTROID/NEUTRAL POINT!!!
-        '''
-        e = -kx*(y) + ky*(x)
-        return e
-
-    def CalculateBoomAreas(self, p1, p2, member, kx, ky, x = None):
+    def calculate_boom_areas(self, p1, p2, member, kx, ky, x = None):
         # p1 and p2 are locations of booms with respect to neutral axes!
         # having 2 points, we obtain 2 strains and stresses
-        e1 = self.AxialStrain(kx, ky, p1[0], p1[1])
-        e2 = self.AxialStrain(kx, ky, p2[0], p2[1])
+        e1 = self.calculate_axial_strain(kx, ky, p1[0], p1[1])
+        e2 = self.calculate_axial_strain(kx, ky, p2[0], p2[1])
 
         # now find the stresses:
         if x is None:
             Ex = member.panel.Ex
         else:
-            Ex = member.Ex(x)
+            Ex = member.get_Ex(x)
 
         s1 = e1 * Ex
         s2 = e2 * Ex
@@ -559,7 +586,7 @@ class Airfoil:
         if x is None:
             td = member.panel.h
         else:
-            td = member.h(x)
+            td = member.get_h(x)
 
         # IMPORTANT:
         # If the strains are both very close to 0 due to the points being close to the neutral axis, this calculation
@@ -590,11 +617,11 @@ class Airfoil:
             )
         return B1, B2, s1, s2
 
-    def GenerateBooms(self, memberlist, side, Mx, My):
+    def generate_booms(self, memberlist, side, Mx, My):
         '''
         Generate a bunch of skin segments with a thickness, start and end point, as well as sigma1, sigma2 and thickness
         '''
-        kx, ky = self.curvatures(Mx, My)
+        kx, ky = self.calculate_curvatures(Mx, My)
 
         # looping through member lists and using previous function:
         for member in memberlist if side == 'top' else reversed(memberlist):
@@ -604,7 +631,7 @@ class Airfoil:
             if self.structuralidealisation:
                 npoints = 2
             else:
-                npoints = round(abs(np.linalg.norm(end-start)/self.segmentlength))
+                npoints = round(abs(np.linalg.norm(end-start)/self.segment_length))
 
             # in the members lists, we know the start and end coordinates, make a list of x points along which we evaluate
             # the booms:
@@ -650,26 +677,26 @@ class Airfoil:
                 # then proceed:
                 else:
                     # find p1 and p2:
-                    p1 = [x-self.xbar, self.Top_height_at_neutralax(x) if side == 'top' else self.Bottom_height_at_neutralax(x)]
+                    p1 = [x-self.xbar, self.top_height_at_neutralax(x) if side == 'top' else self.bot_height_at_neutralax(x)]
 
-                    p2 = [xlist[i + 1]-self.xbar, self.Top_height_at_neutralax(xlist[i + 1]) if side == 'top' else self.Bottom_height_at_neutralax(xlist[i + 1])]
+                    p2 = [xlist[i + 1]-self.xbar, self.top_height_at_neutralax(xlist[i + 1]) if side == 'top' else self.bot_height_at_neutralax(xlist[i + 1])]
 
 
                     # feed appropriate x value to boom areas function:
-                    B1, B2, s1, s2 = self.CalculateBoomAreas(p1, p2, member, kx, ky, x)
+                    B1, B2, s1, s2 = self.calculate_boom_areas(p1, p2, member, kx, ky, x)
                     boomlist[i].B += B1
-                    boomlist[i].Ex = member.Ex(x)
+                    boomlist[i].Ex = member.get_Ex(x)
                     boomlist[i].location = p1
                     boomlist[i].Sigmax = s1
                     boomlist[i + 1].B += B2
-                    boomlist[i + 1].Ex = member.Ex(x)
+                    boomlist[i + 1].Ex = member.get_Ex(x)
                     boomlist[i + 1].location = p2
                     boomlist[i + 1].Sigmax = s2
             member.booms = boomlist
             # TODO: write test that tests the number of booms and segments created
         return
 
-    def GenerateSparBooms(self):
+    def generate_spar_booms(self):
         '''
         Function generates booms for the spar members in the memberlists.
         :return:
@@ -681,16 +708,16 @@ class Airfoil:
         if Mx == 0 and My == 0:
             raise ValueError("Moments Mx and My cannot both be zero. Analysis requires at least one non-zero moment.")
 
-        kx, ky = self.curvatures(Mx, My)
+        kx, ky = self.calculate_curvatures(Mx, My)
 
-        for i, member in enumerate(self.sparmembers):
+        for i, member in enumerate(self.spar_members):
             # apply the boom areas function to each segment in the member:
             start = np.array(member.startcoord)
             end = np.array(member.endcoord)
             if self.structuralidealisation:
                 npoints = 2
             else:
-                npoints = round(abs(np.linalg.norm(end - start) / self.segmentlength))
+                npoints = round(abs(np.linalg.norm(end - start) / self.segment_length))
             ylocations = np.linspace(member.startcoord[1], member.endcoord[1], npoints)
             x = member.startcoord[0]
 
@@ -706,7 +733,7 @@ class Airfoil:
                 p2 = [x - self.xbar, ylocations[i + 1] - self.ybar]
 
                 # Then find the boom areas and normal stresses:
-                B1, B2, s1, s2 = self.CalculateBoomAreas(p1, p2, member, kx, ky)
+                B1, B2, s1, s2 = self.calculate_boom_areas(p1, p2, member, kx, ky)
                 # Now add these to the boom objects in the list
                 boomlist[i].B += B1
                 boomlist[i].Ex = member.panel.Ex
@@ -721,7 +748,7 @@ class Airfoil:
             member.booms = boomlist
         return
 
-    def Calculate_SectionShearFlow(self, memberlist, Sx, Sy):
+    def calculate_section_shear_flow(self, memberlist, Sx, Sy):
         """ for one closed section, shear flow is calculated, and assigned to the members"""
         Brxr = 0
         Bryr = 0
@@ -747,33 +774,34 @@ class Airfoil:
             member.segments = segmentlist
         return Brxr, Bryr
 
-    def SectionShearFlows(self, Sx, Sy):
-        self.GenerateBooms(self.topmembers, 'top', self.Mx, self.My)
-        self.GenerateBooms(self.botmembers, 'bot', self.Mx, self.My)
-        self.GenerateSparBooms()
+    def section_shear_flows(self, Sx, Sy):
+        # TODO: what does this function do?
+        self.generate_booms(self.top_members, 'top', self.Mx, self.My)
+        self.generate_booms(self.bot_members, 'bot', self.Mx, self.My)
+        self.generate_spar_booms()
         # initialize section list:
         self.sectionlist = []
         # There are as many sections as there are members in the top or bottom skin:
-        for i, member in enumerate(self.topmembers):
+        for i, member in enumerate(self.top_members):
             # exceptions for first and last sections:
-            topmember = copy.deepcopy(self.topmembers[i])
-            botmember = copy.deepcopy(self.botmembers[i])
+            topmember = copy.deepcopy(self.top_members[i])
+            botmember = copy.deepcopy(self.bot_members[i])
             if i == 0:
-                memberlist = [topmember, copy.deepcopy(self.sparmembers[i]), botmember]
+                memberlist = [topmember, copy.deepcopy(self.spar_members[i]), botmember]
 
-            elif i == len(self.topmembers)-1:
+            elif i == len(self.top_members)-1:
                 memberlist = [topmember, botmember,
-                              copy.deepcopy(self.sparmembers[i-1])]
+                              copy.deepcopy(self.spar_members[i-1])]
 
             # now the 'main loop'
             else:
                 # NOTE: We make copies of all the members!
-                memberlist = [topmember, copy.deepcopy(self.sparmembers[i]),
-                              botmember, copy.deepcopy(self.sparmembers[i-1])]
+                memberlist = [topmember, copy.deepcopy(self.spar_members[i]),
+                              botmember, copy.deepcopy(self.spar_members[i-1])]
 
             # now calculate the shear flow:
             # We then pass this member list and calculate the shear flow for the open cross section:
-            self.Calculate_SectionShearFlow(memberlist, Sx, Sy)
+            self.calculate_section_shear_flow(memberlist, Sx, Sy)
             toppoints = [topmember.booms[i].location for i in range(len(topmember.booms))]
             botpoints = [botmember.booms[i].location for i in range(len(botmember.booms))]
             A = self.calculate_area(toppoints, botpoints)
@@ -782,17 +810,22 @@ class Airfoil:
             trailingedge = False
             if i == 0:
                 leadingedge = True
-            elif i == len(self.topmembers)-1:
+            elif i == len(self.top_members)-1:
                 trailingedge = True
 
             # store in a section object for ease of access:
-            currentsection = section(memberlist, Sx, Sy, leadingedge, trailingedge, A)
-            self.sectionlist.append(currentsection)
-
-
+            current_section = Section(memberlist, Sx, Sy, leadingedge, trailingedge, A)
+            self.sectionlist.append(current_section)
         return
 
-    def SectionShearCorrection(self):
+    def section_shear_correction(self):
+        '''
+        Function applies the shear flow correction based on the principle that all sections in a multi-sectioned airfoil
+        have the same rate of twist, assuming an undistorted cross section.
+
+        :return: list containing solution to linear system
+        return not used
+        '''
         # condition matrix by using differnt units! currenly units are all N and mm
         # we can arbitrarily change the unit to match the magnitude of the numbers.
 
@@ -847,26 +880,19 @@ class Airfoil:
         vector = np.zeros(len(self.sectionlist) + 1)
         for i, section in enumerate(self.sectionlist):
             vector[i] = -section.int_qb_ds_over_t * section.prefactor * qscalingfactor
-        vector[-1] = sum([-section.ShearMoment * Mscalingfactor for section in self.sectionlist])
+        vector[-1] = np.sum([-section.ShearMoment * Mscalingfactor for section in self.sectionlist])
         
         # moment arms of shear forces wrt shear center (neutral point):
         y_arm = self.yshear - self.ybar
         x_arm = self.xshear - self.xbar
         self.Moment_applied = self.Sx*y_arm + -self.Sy * x_arm
         vector[-1] += self.Moment_applied * Mscalingfactor
-        # print('--------------------------------------------------------------------------')
-        # print('array:')
-        # print(array)
-        # print('vector:')
-        # print(vector)
-        # print('--------------------------------------------------------------------------')
-        # we now solve the system
+
         x, residuals, rank, s = lstsq(array, vector)
         x[:-1] = x[:-1] / qscalingfactor
         x[-1] = x[-1] / radscalingfactor
         condnr = np.linalg.cond(array)
-        # print('conditioning nr:', condnr)
-        # print('solution vector:', x)
+
         # the shear flow corrections are as follows:
         correctionfactors = x[0:-1]
         # print('correction factors: ', correctionfactors)
@@ -876,10 +902,10 @@ class Airfoil:
 
         if self.plot:
             for Section in self.sectionlist:
-                Section.PlotShearFlow()
+                Section.plot_shear_flow()
         return x
 
-    def ShearSuperPosition(self):
+    def shear_superposition(self):
         ''' this function superimposes the shear stresses found in the sections seperately, now in the original members'''
 
         for i, section in enumerate(self.sectionlist):
@@ -904,8 +930,8 @@ class Airfoil:
 
                 sparmemberindexes = [i, i - 1]
                 memberindexforspar = [1, 3]
-            self.topmembers[i] = section.members[topindex]
-            self.botmembers[i] = section.members[botindex]
+            self.top_members[i] = section.members[topindex]
+            self.bot_members[i] = section.members[botindex]
 
             # for the spars, the member class instance does not have segments yet, if it's the first time accessing the
             # spar member, we must copy it.
@@ -914,25 +940,25 @@ class Airfoil:
             for n, index in enumerate(sparmemberindexes):
                 # if the spar member does not have segments, it means it has not been replaced by an
                 # object from the analysis for the section, thus it can be replaced:
-                if not self.sparmembers[index].segments:
-                    self.sparmembers[index] = section.members[memberindexforspar[n]]
+                if not self.spar_members[index].segments:
+                    self.spar_members[index] = section.members[memberindexforspar[n]]
                 else:
-                    for k, segment in enumerate(self.sparmembers[index].segments):
+                    for k, segment in enumerate(self.spar_members[index].segments):
                         # we must subtract the result as the qs in the next cell is always opposite!
                         segment.qs += -section.members[memberindexforspar[n]].segments[k].qs
         return
 
-    def PlotShearFlow(self):
+    def plot_shear_flow(self):
         allsegments = []
-        for member in self.topmembers:
+        for member in self.top_members:
             newsegments = [(segment.p1, segment.p2, segment.qs) for segment in member.segments]
             allsegments.extend(newsegments)  # Use extend instead of append to flatten the list
 
-        for member in self.botmembers:
+        for member in self.bot_members:
             newsegments = [(segment.p1, segment.p2, segment.qs) for segment in member.segments]
             allsegments.extend(newsegments)  # Use extend instead of append to flatten the list
 
-        for member in self.sparmembers:
+        for member in self.spar_members:
             newsegments = [(segment.p1, segment.p2, segment.qs) for segment in member.segments]
             allsegments.extend(newsegments)
 
@@ -972,7 +998,7 @@ class Airfoil:
             ax.plot([x1, x2], [y1, y2], color=cmap(norm(value)), linewidth=2)
 
         # Normalize the shear force vector to 0.25 * chord
-        chord = self.chordlength
+        chord = self.chord_length
         vector_magnitude = (self.Sx ** 2 + self.Sy ** 2) ** 0.5
         normalized_sx = self.Sx / vector_magnitude * 0.1 * chord
         normalized_sy = self.Sy / vector_magnitude * 0.1 * chord
@@ -1000,7 +1026,7 @@ class Airfoil:
         ax.set_title('Shear flow, clockwise is positive, from the origin')
         return plt
 
-    def PlotNormalStrain(self):
+    def plot_normal_strain(self):
         '''
         we have to use the points given by points list for both top and bottom
         :return:
@@ -1011,11 +1037,11 @@ class Airfoil:
 
         x_coords = [point[0] for point in coordinates]
         y_coords = [point[1] for point in coordinates]
-        kx, ky = self.curvatures(self.Mx, self.My)
+        kx, ky = self.calculate_curvatures(self.Mx, self.My)
 
         # having 2 points, we obtain 2 strains and stresses
 
-        strains = [self.AxialStrain(kx, ky, point[0], point[1])*1e6 for point in coordinates]
+        strains = [self.calculate_axial_strain(kx, ky, point[0], point[1])*1e6 for point in coordinates]
 
         plt.figure(figsize=(8, 6))
         sc = plt.scatter(x_coords, y_coords, c=strains, cmap='viridis', s=20)
@@ -1035,17 +1061,17 @@ class Airfoil:
         plt.show()
         return
 
-    def PlotNormalForceIntensity(self):
+    def plot_normalforce_intensity(self):
         allsegments = []
-        for member in self.topmembers:
-            newsegments = [(segment.p1, segment.p2, member.booms[i].Sigmax*member.h(member.booms[i].location[0]-self.xbar)) for i, segment in enumerate(member.segments)]
+        for member in self.top_members:
+            newsegments = [(segment.p1, segment.p2, member.booms[i].Sigmax*member.get_h(member.booms[i].location[0]-self.xbar)) for i, segment in enumerate(member.segments)]
             allsegments.extend(newsegments)  # Use extend instead of append to flatten the list
 
-        for member in self.botmembers:
-            newsegments = [(segment.p1, segment.p2, member.booms[i].Sigmax*member.h(member.booms[i].location[0]-self.xbar)) for i, segment in enumerate(member.segments)]
+        for member in self.bot_members:
+            newsegments = [(segment.p1, segment.p2, member.booms[i].Sigmax*member.get_h(member.booms[i].location[0]-self.xbar)) for i, segment in enumerate(member.segments)]
             allsegments.extend(newsegments)  # Use extend instead of append to flatten the list
 
-        for member in self.sparmembers:
+        for member in self.spar_members:
             newsegments = [(segment.p1, segment.p2, member.booms[i].Sigmax*member.panel.h) for i, segment in enumerate(member.segments)]
             allsegments.extend(newsegments)
 
@@ -1091,10 +1117,11 @@ class Airfoil:
         ax.set_ylabel('Y-axis')
         ax.set_title('Normal force intensity (N/mm)')
         return plt
-    def membercurvature(self, member, side):
+    def calculate_member_curvature(self, member, side):
         '''
-        Assigns curvature to members. the reason we dont do this in the member is because the booms are located on linearly
-        interpolated thus some form straight lines -> as a result, it would display curvature of 0.
+        Calculates curvature of one member and then assigns it to that member.
+        The reason we dont do this in the member is because the booms are located on linearly
+        interpolated thus some have 3 booms on a perfectly straight line -> as a result, it would display curvature of 0.
         '''
         # find member start and end x coord:
         # Filter points based on the given x bounds
@@ -1123,20 +1150,115 @@ class Airfoil:
         member.R = radius_max
         return
 
-    def AssignMemberCurvature(self):
+    def assign_curvature_all_members(self):
         '''
         assigns curvature to all members in top and bottom:
         :return:
         '''
-        for member in self.topmembers:
-            self.membercurvature(member, side='top')
+        for member in self.top_members:
+            self.calculate_member_curvature(member, side='top')
 
-        for member in self.botmembers:
-            self.membercurvature(member, side = 'bot')
+        for member in self.bot_members:
+            self.calculate_member_curvature(member, side = 'bot')
 
         return
+    def solve_stresses_CSA(self, moments, shearforces, center):
+        '''
+        Algorithm that solves for stresses, can be run after initialisation
+        :return:
+        '''
+        self.Mx, self.My = moments
+        self.Sx, self.Sy = shearforces
+        # TODO: fix these dimensions so they are in the global (wing) FOR?
+        self.xshear, self.yshear = center # relative to the local airfoil FOR
 
-    def circle_radius_from_three_points(self, p1, p2, p3):
+        # Functions for the normal stresses/deformations:
+        self.neutral_points() # calculates neutral point
+        self.calculate_EI() # then calculates EI around neutral point
+        self.calculate_curvatures(self.Mx, self.My) # calculates curvatures (kx, ky)
+
+        # Functions for shear stress solving
+        self.section_shear_flows(self.Sx, self.Sy)
+        self.section_shear_correction()
+        self.shear_superposition()
+        # we want to check the total shear force exerted by the section:
+        self.shear_force_analysis()
+        if self.plot:
+            self.plot_shear_flow()
+            self.plot_normalforce_intensity()
+        return
+
+    def shear_force_analysis(self):
+        Fxtop, Fytop, Mtop = self.force_moment_semgents(self.top_members)
+        Fxbot, Fybot, Mbot = self.force_moment_semgents(self.bot_members)
+        Fxspar, Fyspar, Mspar = self.force_moment_semgents(self.spar_members)
+
+        Fx = Fxtop + Fxbot + Fxspar
+        Fy = Fytop + Fybot + Fyspar
+        M = Mtop + Mbot + Mspar
+        return Fx, Fy, M
+
+    def force_moment_semgents(self, memberlist):
+        Fx = 0
+        Fy = 0
+        M = 0
+        for member in memberlist:
+            for segment in member.segments:
+                # shear moments: (copied from section code)
+                p1 = np.array(segment.p1)
+                p2 = np.array(segment.p2)
+                center = p1 + (p2 - p1) / 2
+                rx, ry = center[0], center[1]
+
+                # force vector:
+                directionvector = p2 - p1
+                # force by segments may not be consistent?!
+                f = segment.qs * directionvector
+                fx, fy = f[0], f[1]
+                Fx += fx
+                Fy += fy
+                moment = ry * fx - rx * fy
+                M += moment
+        return Fx, Fy, M
+
+    def failure_analysis(self):
+        super().failure_analysis()
+        # first set the curvature of the members:
+        self.assign_curvature_all_members()
+        # then we can perform the failure analysis
+        all_members = self.top_members + self.bot_members + self.spar_members
+        member_FIs = [member.failure_analysis() for member in all_members]
+
+        self.set_failure_indicator('child', max([max(value for key, value in
+                                                     child_object.failure_indicators.items() if
+                                                     isinstance(value, (int, float))) for child_object in
+                                                 self.child_objects]))
+
+        return max(value for key, value in self.failure_indicators.items() if isinstance(value, (int, float)))
+
+    def calculate_weight_per_b(self):
+        '''
+        Calculates the weight per unit wing span of the airfoil based on weight per unit span of each member as well
+        as TODO: glue joints
+
+        :return: float
+        '''
+        members = self.top_members + self.bot_members + self.spar_members
+
+        weight = np.sum([member.calculate_weight_per_b() for member in members])
+        return weight
+
+    @staticmethod
+    def calculate_axial_strain(kx, ky, x, y):
+        '''
+        Calculates strain
+        coordinates around the CENTROID/NEUTRAL POINT!!!
+        '''
+        e = -kx*(y) + ky*(x)
+        return e
+
+    @staticmethod
+    def circle_radius_from_three_points(p1, p2, p3):
         # Extract coordinates
         x1, y1 = p1
         x2, y2 = p2
@@ -1167,87 +1289,20 @@ class Airfoil:
         R = np.sqrt(a ** 2 + b ** 2 - C / D)
 
         return R
-    def SolveStresses_CSA(self, moments, shearforces, center):
-        '''
-        Algorithm that solves for stresses, can be run after initialisation
-        :return:
-        '''
-        self.Mx, self.My = moments
-        self.Sx, self.Sy = shearforces
-        # TODO: fix these dimensions so they are in the global (wing) FOR?
-        self.xshear, self.yshear = center # relative to the local airfoil FOR
-
-        # Functions for the normal stresses/deformations:
-        self.Neutralpoints() # calculates neutral point
-        self.CalculateEI() # then calculates EI around neutral point
-        self.curvatures(self.Mx, self.My) # calculates curvatures (kx, ky)
-
-        # Functions for shear stress solving
-        self.SectionShearFlows(self.Sx, self.Sy)
-        self.SectionShearCorrection()
-        self.ShearSuperPosition()
-        # we want to check the total shear force exerted by the section:
-        self.ShearforceAnalysis()
-        if self.plot:
-            self.PlotShearFlow()
-            self.PlotNormalForceIntensity()
-        return
-
-    def ShearforceAnalysis(self):
-        Fxtop, Fytop, Mtop = self.force_moment_semgents(self.topmembers)
-        Fxbot, Fybot, Mbot = self.force_moment_semgents(self.botmembers)
-        Fxspar, Fyspar, Mspar = self.force_moment_semgents(self.sparmembers)
-
-        Fx = Fxtop + Fxbot + Fxspar
-        Fy = Fytop + Fybot + Fyspar
-        M = Mtop + Mbot + Mspar
-        return Fx, Fy, M
-
-    def force_moment_semgents(self, memberlist):
-        Fx = 0
-        Fy = 0
-        M = 0
-        for member in memberlist:
-            for segment in member.segments:
-                # shear moments: (copied from section code)
-                p1 = np.array(segment.p1)
-                p2 = np.array(segment.p2)
-                center = p1 + (p2 - p1) / 2
-                rx, ry = center[0], center[1]
-
-                # force vector:
-                directionvector = p2 - p1
-                # force by segments may not be consistent?!
-                f = segment.qs * directionvector
-                fx, fy = f[0], f[1]
-                Fx += fx
-                Fy += fy
-                moment = ry * fx - rx * fy
-                M += moment
-        return Fx, Fy, M
-
-    def FailureAnalysis_CSA(self):
-        # first set the curvature of the members:
-        self.AssignMemberCurvature()
-        # then we can perform the failure analysis
-        allmembers = self.topmembers + self.botmembers + self.sparmembers
-        memberFIs = [member.CSA_FailureAnalysis() for member in allmembers]
-
-        return max(memberFIs)
 
 
 
 if __name__ == '__main__':
 
-    Laminate = LaminateBuilder([45, -45, 0 ,90], True, True, 1)
+    Laminate = laminate_builder([45, -45, 0 ,90], True, True, 1)
     member = Member(Laminate)
-    sparlocations = [80, 250]
-    sparmembers = [copy.deepcopy(member) for _ in range(len(sparlocations))]
-    topmembers = [copy.deepcopy(member) for _ in range(len(sparlocations)+1)]
-    botmembers = [copy.deepcopy(member) for _ in range(len(sparlocations)+1)]
+    spar_locations = [80, 250]
+    spar_members = [copy.deepcopy(member) for _ in range(len(spar_locations))]
+    top_members = [copy.deepcopy(member) for _ in range(len(spar_locations)+1)]
+    bot_members = [copy.deepcopy(member) for _ in range(len(spar_locations)+1)]
 
-    reinforcementpaneltop = LaminateBuilder([45, -45, 0, 0, 0, 0, 0, 0, 90], True, True, 1)
-    reinforcementpanelbot = LaminateBuilder([45, -45, 0, 0, 0, 0, 0, 0, 90], True, True, 1)
+    reinforcementpaneltop = laminate_builder([45, -45, 0, 0, 0, 0, 0, 0, 90], True, True, 1)
+    reinforcementpanelbot = laminate_builder([45, -45, 0, 0, 0, 0, 0, 0, 90], True, True, 1)
 
     topsubmember = Member(reinforcementpaneltop)
     botsubmember = Member(reinforcementpanelbot)
@@ -1255,14 +1310,14 @@ if __name__ == '__main__':
     reinforcement_end = 100
 
     type = 'NACA2410'
-    Airfoil = Airfoil(type, 1, 300, sparlocations, topmembers, botmembers, sparmembers, topsubmember, 60, 100, botsubmember, 60, 100)
-    Airfoil.SolveStresses_CSA([30000, 0], [0, 80], [300/4, 0])
-    Airfoil.FailureAnalysis_CSA()
+    Airfoil = Airfoil(type, 1, 300, spar_locations, top_members, bot_members, spar_members, topsubmember, 60, 100, botsubmember, 60, 100)
+    Airfoil.solve_stresses_CSA([30000, 0], [0, 80], [300/4, 0])
+    Airfoil.failure_analysis()
 
     # Assuming 'topshears' and 'xlist' are already defined from the loop
     topshears = []
     xlist = []
-    for member in Airfoil.topmembers:
+    for member in Airfoil.top_members:
         for segment in member.segments:
             topshears.append(segment.qs)
             xlist.append((segment.p1[0] + segment.p2[0]) / 2)

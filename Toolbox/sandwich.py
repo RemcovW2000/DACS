@@ -1,12 +1,13 @@
-import numpy as np
-from Toolbox.Laminate import Laminate
-from Toolbox.Laminate import LaminateBuilder
-from Toolbox.Core import Core
-import Data.Panels
 import copy
 
-class Sandwich:
+import numpy as np
+import Data.Panels
+from structural_entity import StructuralEntity
+
+class Sandwich(StructuralEntity):
     def __init__(self, laminate1, laminate2, core, Loads = None, Strains = None):
+        super().__init__('sandwich')
+
         self.laminate1 = laminate1 # bottom laminate
         self.laminate2 = laminate2 # top laminate
         self.core = core
@@ -17,24 +18,28 @@ class Sandwich:
         self.h = self.laminate1.h + self.laminate2.h + self.core.h
 
         # ABD matrix assigned upon initialisation:
-        self.CalculateEquivalentABD()
-        self.CalculateEquivalentProperties()
+        self.calculate_equivalent_ABD()
+        self.calculate_equivalent_properties()
 
-    def CalculateEquivalentABD(self):
+    @property
+    def child_objects(self):
+        return [self.laminate1, self.laminate2, self.core]
+
+    def calculate_equivalent_ABD(self):
         '''
         Calculates the ABD matrix for the sandwich structure
         :return:
         '''
         # TODO: ADD TRANSVERSE SHEAR EFFECTS!!
-        L1ABD = self.laminate1.CalculateCoreABD(self.core.h)
-        L2ABD = self.laminate2.CalculateCoreABD(self.core.h)
+        L1ABD = self.laminate1.calculate_core_ABD(self.core.h)
+        L2ABD = self.laminate2.calculate_core_ABD(self.core.h)
 
         totalABD = L1ABD + L2ABD
 
         self.ABD_matrix = totalABD
         return totalABD
 
-    def CalculateEquivalentProperties(self):
+    def calculate_equivalent_properties(self):
         # Here we calculate the engineering constants (or equivalent properties):
         self.Ex = (self.ABD_matrix[0, 0] * self.ABD_matrix[1, 1] - self.ABD_matrix[0, 1] ** 2) / (
                     self.h * self.ABD_matrix[1, 1])
@@ -47,7 +52,7 @@ class Sandwich:
         self.Gxy = self.ABD_matrix[2, 2] / self.h
         return
 
-    def FailureAnalysis(self):
+    def failure_analysis(self):
         '''
         this is the general faulure analysis function
 
@@ -55,12 +60,13 @@ class Sandwich:
         FI>0, when FI = 1 failure occurs at the applied load
         Loads must be assigned BEFORE calling this function!
         '''
+        super().failure_analysis()
         # First calculate loads on each facesheet:
         # This function also ASSIGNS LOADS TO THE LAMINATES!
-        self.FaceSheetLoadDistribution()
+        self.face_sheet_load_distribution()
 
         # then we can check first ply failure for both facesheets:
-        FPFFI = self.LaminateFPF()
+        FPFFI = self.laminate_FPF()
         print('first ply failure FI:', FPFFI)
 
         # Now we can also check facesheet wrinkling for the specific loadcase
@@ -71,27 +77,41 @@ class Sandwich:
         L2stresses, L2directions = self.laminate2.principal_stresses_and_directions()
 
         # using the directions we can find the material strength in that direction
-        wrinklingFI1 = self.WrinklingAnalysis(L1stresses, L1directions, self.laminate1)
-        wrinklingFI2 = self.WrinklingAnalysis(L2stresses, L2directions, self.laminate2)
+        wrinklingFI1 = self.wrinkling_analysis(L1stresses, L1directions, self.laminate1)
+        wrinklingFI2 = self.wrinkling_analysis(L2stresses, L2directions, self.laminate2)
         # Now use known formulas to find the failure indicators:
         print('WrinklingFIs: ', wrinklingFI1, wrinklingFI2)
-        # Return largest FI!
-        FImax = max([wrinklingFI1, wrinklingFI2, FPFFI])
-        return FImax
 
-    def LaminateFPF(self):
+        self.set_failure_indicator('wrinkling', wrinklingFI1)
+        self.set_failure_indicator('wrinkling', wrinklingFI2)
+        self.set_failure_indicator('first_ply_failure', FPFFI)
+        self.set_failure_indicator('child', max([max(value for key, value in
+                                                     child_object.failure_indicators.items() if
+                                                     isinstance(value, (int, float))) for child_object in
+                                                 self.child_objects]))
+        return max(value for key, value in self.failure_indicators.items() if isinstance(value, (int, float)))
+    def calculate_weight_per_A(self):
+        '''
+        Calculates the weight of the laminate per unit area based on this weight per unit area of both the facesheets
+        as the core
+
+        :return: float
+        '''
+        return np.sum([self.laminate1.calculate_weight_per_unit_A(), self.laminate2.calculate_weight_per_unit_A(), self.core.calculate_weight_per_unit_A()])
+
+    def laminate_FPF(self):
         # loads are assigned
-        maxFI1 = self.laminate1.FailureAnalysis()
-        maxFI2 = self.laminate2.FailureAnalysis()
+        maxFI1 = self.laminate1.failure_analysis()
+        maxFI2 = self.laminate2.failure_analysis()
         return max(maxFI1, maxFI2)
 
-    def BucklingSchalingFactor(self, Ncrit):
+    def buckling_scaling_factor(self, Ncrit):
         # Assuming k = 1 for now:
         k = 1
         Nxcrit = Ncrit/(1+Ncrit/(self.core.h*self.core.G))
         return Nxcrit
 
-    def WrinklingAnalysis(self, laminatestresses, laminatedirections, laminate):
+    def wrinkling_analysis(self, laminatestresses, laminatedirections, laminate):
         # We obtain stresses and directions:
         # TODO: take into account assymetric laminates
         negative_values = laminatestresses[laminatestresses < 0]
@@ -139,7 +159,7 @@ class Sandwich:
             FI = 0
         return FI
 
-    def FaceSheetLoadDistribution(self):
+    def face_sheet_load_distribution(self):
         # Normal loads are as follows:
         Nx = self.Loads[0]
         Ny = self.Loads[1]
@@ -180,7 +200,7 @@ class Sandwich:
         self.laminate2.Loads = [Nx2, Ny2, Ns2, 0, 0, 0]
         return
 
-    def SandwichWrinkingShear(self):
+    def shear_load_wrinkling_Ncrit(self):
         t_face = self.laminate1.h
         ABD_matrix45 = self.laminate1.rotated_ABD(np.deg2rad(45))
 
@@ -227,5 +247,5 @@ class Sandwich:
 if __name__ == '__main__':
     sandwich = copy.deepcopy(Data.Panels.Sandwiches['PanelWingRoot'])
     sandwich.Loads = [-10, 0, 2, 0, 0, 0]
-    sandwich.FailureAnalysis()
+    sandwich.failure_analysis()
 

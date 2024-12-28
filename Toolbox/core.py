@@ -24,3 +24,12 @@ class Core:
         cos_theta_squared = np.cos(theta) ** 2
         Gybarz = cos_theta_squared * Gyz + sin_theta_squared * Gxz
         return Gybarz
+
+    def calculate_weight_per_A(self):
+        '''
+        Calculates the weight of the core material per unit area based on the density and thickness. Does not take into
+        account extra weight per unit area of the core material due to soaking of resin into partially open cells.
+
+        :return:
+        '''
+        return self.h * self.coreproperties['rho']
