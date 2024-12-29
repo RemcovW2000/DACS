@@ -2,6 +2,7 @@
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import scipy.optimize as opt
+from scipy.optimize import root
 import scipy.interpolate as interp
 
 # Local imports
@@ -127,13 +128,26 @@ class Member(StructuralEntity):
         # -------------------------------------------------------------------------
         if self.booms:
             if self.submember:
-                submember_booms = [boom for boom in self.booms if self.submember_start < boom.location[0] + self.xbar < self.submember_end]
-                booms =[boom for boom in self.booms if self.submember_start > boom.location[0] + self.xbar or self.submember_end < boom.location[0] + self.xbar]
-                # A segment is considered in the submember if one of the booms is in the segment, such that the potentially
+                submember_booms = [boom for boom in self.booms if self.submember_start < boom.location[0] + self.xbar
+                                   < self.submember_end]
+                booms =[boom for boom in self.booms if self.submember_start > boom.location[0] + self.xbar or
+                        self.submember_end < boom.location[0] + self.xbar]
+                # A segment is considered in the submember if one of the booms is in the segment, such that the
+                # potentially
                 # higher stress is not counted into the main member
 
-                submember_segments = [segment for segment in self.segments if self.submember_start < min(segment.p1[0]+self.xbar, segment.p2[0]+self.xbar) and self.submember_end > max(segment.p1[0]+self.xbar, segment.p2[0]+self.xbar)]
-                segments = [segment for segment in self.segments if self.submember_start > max(segment.p1[0] + self.xbar, segment.p2[0]+self.xbar) or self.submember_end < min(segment.p1[0]+self.xbar,segment.p2[0]+self.xbar)]
+                submember_segments = [segment for segment in self.segments if
+                                      self.submember_start < min(segment.p1[0] + self.xbar,
+                                                                 segment.p2[0]+self.xbar)
+                                      and self.submember_end > max(segment.p1[0] + self.xbar,
+                                                                   segment.p2[0]+self.xbar)]
+
+                segments = [segment for segment in self.segments if self.submember_start >
+                            max(segment.p1[0]+self.xbar,
+                                segment.p2[0]+self.xbar)
+                            or
+                            self.submember_end < min(segment.p1[0]+self.xbar,
+                                                     segment.p2[0]+self.xbar)]
 
                 self.submember.booms = submember_booms
                 self.submember.segments = submember_segments
@@ -180,11 +194,10 @@ class Member(StructuralEntity):
             max_normal = min(normal_force_intensities)
             max_abs_shear = shear_flows[index_max_abs_shear]
 
-            self.Loads = [max_normal * self.b, 0, max_abs_shear * self.a, 0, 0 ,0]
+            self.Loads = [max_normal * self.b, 0, max_abs_shear * self.b, 0, 0 ,0]
 
             # Curvature must have been assigned in airfoil class!
             Buckling_FI = self.buckling_analysis()
-            self.BucklingFI = Buckling_FI
             FI_list = failureindicators_panel + [Buckling_FI]
             print(failureindicators_panel, Buckling_FI)
             max_FI = max(FI_list)
@@ -192,11 +205,9 @@ class Member(StructuralEntity):
                 FI_list.append(submember_max_FI)
                 max_FI = max(FI_list)
 
-            self.set_failure_indicator('buckling', Buckling_FI)
-            self.set_failure_indicator('child', max([max(value for key, value in
-                                                         child_object.failure_indicators.items() if
-                                                         isinstance(value, (int, float))) for child_object in
-                                                     self.child_objects if child_object]))
+
+            failure_modes = [['buckling', Buckling_FI]]
+            self.finalize_failure_analysis(failure_modes)
         else:
             raise TypeError('No booms exist, code for use of members outside of cross sectional analysis must be'
                             ' finised, add a way to run both buckling and first ply failure analysis using assigned'
@@ -213,8 +224,7 @@ class Member(StructuralEntity):
         '''
         # find the right scaling factor:
         if self.R == None:
-            print('R not assigned!')
-            # R not assigned -> use flat plate eq:
+            # curvature not assigned -> use flat plate
             scalingfactor = 1
         elif self.b**2/self.R < 1:
             # too flat for curved equations: use flat plate eq:
@@ -236,12 +246,44 @@ class Member(StructuralEntity):
             # TODO: add a more nuanced way to check this! shear load could still cause buckling!
             FI = 0
         else:
-            Ncritnormal = self.combined_load_buckling_Ncrit(self.Loads)
-            Ncrit = scalingfactor * Ncritnormal
-            FI = self.Loads[0]/Ncrit
+            FI = self.combined_load_buckling_FI(self.Loads)
         return FI
 
-    def combined_load_buckling_Ncrit(self, Loads):
+    def combined_load_buckling_FI(self, loads):
+        Nx = loads[0]/self.b
+        Nxy = loads[2]/self.b
+
+        AR = self.b/self.a
+        if AR <= 1.4:
+            Ncrit = self.combined_load_buckling_Ncrit_0_14(loads)
+            FI = abs(loads[0]/Ncrit)
+        elif 1.4 < AR < 2:
+            Nxycrit = self.shear_load_buckling_Ncrit_14_2()
+            Nxcrit = self.normal_load_buckling_Ncrit()
+            FI = abs(Nx)/Nxcrit + (Nxy/Nxycrit)**2
+        else:
+            # linear interpolation between 2 methods:
+            # for a/b = 0:
+            Nxycrit_0 = self.shear_load_buckling_Ncrit_2_inf()
+
+            # for a/b = 0.5
+            Nxycrit_05 = self.shear_load_buckling_Ncrit_14_2()
+
+            # find a/b:
+            a_over_b = self.a/self.b
+
+            Nxycrit = np.interp(a_over_b, [0, 0.5], [Nxycrit_0, Nxycrit_05])
+
+            Nxcrit = self.normal_load_buckling_Ncrit()
+            FI = abs(Nx) / Nxcrit + (Nxy / Nxycrit) ** 2
+        return FI
+
+    def combined_load_buckling_Ncrit_0_14(self, loads):
+        '''
+        Returns Ncrit accurately for plates with aspect ratio close to b/a up to 1.4.
+        :param Loads: Load vector
+        :return:
+        '''
         D11 = self.panel.ABD_matrix[3, 3]
         D12 = self.panel.ABD_matrix[3, 4]
         D22 = self.panel.ABD_matrix[4, 4]
@@ -252,8 +294,8 @@ class Member(StructuralEntity):
                     D11 + 2 * (D12 + 2 * D66) * (self.a / self.b) ** 2 + D22 * (
                         self.a / self.b) ** 4)
 
-        Nx = Loads[0] / self.b
-        Nxy = Loads[2] / self.b
+        Nx = loads[0] / self.b
+        Nxy = loads[2] / self.b
         k = Nxy/Nx
         denominator = 2 - (8192 * self.a**2 * k**2)/(81 * self.b**2 * np.pi**4)
 
@@ -263,6 +305,81 @@ class Member(StructuralEntity):
         # Now obtain the scaling factor from the panel:
         Ncrit = self.panel.buckling_scaling_factor(Ncrit)
         return Ncrit
+
+    def shear_load_buckling_Ncrit_14_2(self):
+        '''
+        Calculates critical shear load intensity for panel buckling.
+
+        Suitable for aspect ratios corresponding to b/a = 0.5-1
+        :return: float
+        '''
+        a = self.a
+        b = self.b
+
+        D11 = self.panel.ABD_matrix[3, 3]
+        D12 = self.panel.ABD_matrix[3, 4]
+        D22 = self.panel.ABD_matrix[4, 4]
+        D66 = self.panel.ABD_matrix[5, 5]
+
+        AR = a/b
+        D1 = D11 + D22 * AR**4 + 2 * (D12 + 2 * D66) * AR**2
+        D2 = D11 + 81 * D22 * AR**4 + 18 * (D12 + 2 * D66) * AR**2
+        D3 = 81 * D11 + D22 * AR**4 + 18 * (D12 + 2 * D66) * AR**2
+        numerator = np.pi**4 * b / a**3
+        denominator = np.sqrt((14.28/D1**2) + 40.96/(D1*D2) + 40.96/(D1*D3))
+        N_xycrit = numerator/denominator
+        return N_xycrit
+
+    def shear_load_buckling_Ncrit_2_inf(self):
+        '''
+        Calculates critical shear load intensity for panel buckling.
+
+        Suitable for aspect ratio corresponding to b/a = inf
+        :return: float
+        '''
+        a = self.a
+        D11 = self.panel.ABD_matrix[3, 3]
+        D12 = self.panel.ABD_matrix[3, 4]
+        D22 = self.panel.ABD_matrix[4, 4]
+        D66 = self.panel.ABD_matrix[5, 5]
+
+        def calculate_AR(phi):
+            AR = (D11/(D11*np.tan(phi)**4 + 2 * (D12 + 2*D66)*np.tan(phi)**2 + D22))**0.25
+            return AR
+
+        def set_to_0(vars):
+            phi, AR = vars
+            term_1 = 3*D11*AR**4*np.tan(phi)**4
+            term_2 = np.tan(phi)**2 * (6*D11*AR**2 + 2*(D12 + 2*D66)*AR**4)
+            term_3 = D11 + 2*(D12 + 2*D66)*AR**2 + D22*AR**4
+
+            to_minimize = term_1 + term_2 - term_3
+            return to_minimize
+
+        def system_to_solve(vars):
+            phi, AR = vars
+            AR_calculated = calculate_AR(phi)  # Ensure AR matches calculate_AR
+            to_minimize = set_to_0((phi, AR))
+            return [AR - AR_calculated, to_minimize]
+
+        # Initial guesses for phi and AR
+        initial_guess = [0,785398, 1.0]  # Replace with reasonable estimates
+
+        # Solve the system
+        solution = root(system_to_solve, initial_guess, method='hybr')
+
+        if solution.success:
+            phi, AR = solution.x
+        else:
+            raise RuntimeError(f"Solver failed for AR and phi in shear buckling method"
+                               f"failed to converge: {solution.message}")
+
+        term_1 = np.pi**2/(2*AR*a**2 * np.tan(phi))
+        term_21 = (D11*(1+6*np.tan(phi)**2 * AR**2 + np.tan(phi)**4*AR**4))
+        term_22 = 2*(D12 + 2*D66)*(AR**2 + AR**4*np.tan(phi)**2) + D22*AR**4
+
+        N_xycrit = term_1 * (term_21 + term_22)
+        return N_xycrit
 
     def calculate_b(self):
         x1, y1 = self.startcoord
@@ -319,7 +436,7 @@ class Member(StructuralEntity):
         Fcrit = [Fx, Fy, Fs, Mx, My, Mz]
         return Fcrit
 
-    def normal_load_buckling_FI(self):
+    def normal_load_buckling_Ncrit(self):
         """
         In the current loading ratio, what is the critical load that would cause buckling?
         :return:
@@ -329,15 +446,13 @@ class Member(StructuralEntity):
         D22 = self.panel.ABD_matrix[4, 4]
         D66 = self.panel.ABD_matrix[5, 5]
 
-        Fcrits = []
+        Ncrits = []
         for m in range(1, 6):
-            Fcrit = self.b * ((np.pi / self.a) ** 2 * (D11*m**2 + 2 * (D12 + 2 * D66) * (self.a/self.b) ** 2 + (D22/m**2) * (self.a/self.b) ** 4))
-            Fcrits.append(Fcrit)
+            Ncrit = (np.pi / self.a) ** 2 * (D11*m**2 + 2 * (D12 + 2 * D66) * (self.a/self.b) ** 2 + (D22/m**2) * (self.a/self.b) ** 4)
+            Ncrits.append(Ncrit)
 
-        Fcrit_min = min(Fcrits)
-        min_index = Fcrits.index(Fcrit_min)
-        min_mode = min_index+1
-        return Fcrit_min
+        Ncrit_min = min(Ncrits)
+        return Ncrit_min
 
     def calculate_arc_length(self):
         '''
@@ -355,21 +470,36 @@ class Member(StructuralEntity):
         '''
 
         if self.submember:
-            sub_member_segments = [segment for segment in self.segments if self.submember_start < min(segment.p1[0]+self.xbar, segment.p2[0]+self.xbar) and self.submember_end > max(segment.p1[0]+self.xbar, segment.p2[0]+self.xbar)]
-            segments = [segment for segment in self.segments if self.submember_start > max(segment.p1[0] + self.xbar, segment.p2[0]+self.xbar) or self.submember_end < min(segment.p1[0]+self.xbar,segment.p2[0]+self.xbar)]
+            sub_member_segments = [segment for segment in self.segments if
+                                   self.submember_start < min(segment.p1[0]+self.xbar,
+                                                              segment.p2[0]+self.xbar)
+                                   and self.submember_end > max(segment.p1[0]+self.xbar,
+                                                                segment.p2[0]+self.xbar)]
 
-            normal_member_arc_length = np.sum([np.sqrt((segment.p2[0] - segment.p1[0]) ** 2 + (segment.p2[1] - segment.p1[1]) ** 2) for segment in
-                    segments])
+            segments = [segment for segment in self.segments if
+                        self.submember_start > max(segment.p1[0]+self.xbar,
+                                                   segment.p2[0]+self.xbar)
+                        or self.submember_end < min(segment.p1[0]+self.xbar,
+                                                    segment.p2[0]+self.xbar)]
+
+            normal_member_arc_length = np.sum([np.sqrt((segment.p2[0] - segment.p1[0]) ** 2 +
+                                                       (segment.p2[1] - segment.p1[1]) ** 2)
+                                               for segment in segments])
+
             normal_panel_weight_per_A = self.panel.calculate_weight_per_A() * normal_member_arc_length
 
-            sub_member_arc_length = np.sum([np.sqrt((segment.p2[0] - segment.p1[0]) ** 2 + (segment.p2[1] - segment.p1[1]) ** 2) for segment in
-                    sub_member_segments])
+            sub_member_arc_length = np.sum([np.sqrt((segment.p2[0] - segment.p1[0]) ** 2 +
+                                                    (segment.p2[1] - segment.p1[1]) ** 2)
+                                            for segment in sub_member_segments])
+
             sub_member_panel_weight_per_A = self.submember.panel.calculate_weight_per_A()*sub_member_arc_length
             weight_per_b = normal_panel_weight_per_A + sub_member_panel_weight_per_A
 
         else:
-            normal_member_arc_length = np.sum([np.sqrt((segment.p2[0] - segment.p1[0]) ** 2 + (segment.p2[1] - segment.p1[1]) ** 2) for segment in
-                    self.segments])
+            normal_member_arc_length = np.sum([np.sqrt((segment.p2[0] - segment.p1[0]) ** 2 +
+                                                       (segment.p2[1] - segment.p1[1]) ** 2)
+                                               for segment in self.segments])
+
             normal_panel_weight_per_A = self.panel.calculate_weight_per_A() * normal_member_arc_length
             weight_per_b = normal_panel_weight_per_A
 

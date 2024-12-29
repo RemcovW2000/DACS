@@ -493,10 +493,8 @@ class Wing(StructuralEntity):
         """
         self.airfoil_FIs = [airfoil.failure_analysis() for airfoil in self.airfoils]
 
-        self.set_failure_indicator('child', max([max(value for key, value in
-                                                     child_object.failure_indicators.items() if
-                                                     isinstance(value, (int, float))) for child_object in
-                                                 self.child_objects]))
+        self.finalize_failure_analysis(None)
+
         return max(value for key, value in self.failure_indicators.items() if isinstance(value, (int, float)))
 
     def plot_max_FI(self):

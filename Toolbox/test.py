@@ -3,4 +3,12 @@ dict = {
     'b': 2
 }
 
-print(max(dict))
+base_string = "example"
+n = 5
+result = f"{base_string}_{n}"
+
+random_list = []
+
+
+childkey = 'child_'
+print(childkey[0:6])

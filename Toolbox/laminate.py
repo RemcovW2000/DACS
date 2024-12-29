@@ -197,12 +197,10 @@ class Laminate(StructuralEntity):
 
         # We save the maximum failure factor in any of the lamina, to calculate the next loadstep:
         max_failure_indicator = max(failure_indicators)
-        self.set_failure_indicator('first_ply_failure', max_failure_indicator)
-        self.set_failure_indicator('child', max([max(value for key, value in
-                                                     child_object.failure_indicators.items() if
-                                                     isinstance(value, (int, float))) for child_object in
-                                                 self.child_objects]))
-        print('laminate FI:', self.failure_indicators)
+
+        failure_modes = [['first_ply_failure', max_failure_indicator]]
+        self.finalize_failure_analysis(failure_modes)
+
         return max(value for key, value in self.failure_indicators.items() if isinstance(value, (int, float)))
 
     def buckling_scaling_factor(self, Ncrit):

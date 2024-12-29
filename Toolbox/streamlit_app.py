@@ -15,9 +15,9 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 # Add the root directory (DACS) to the Python path
 sys.path.append(os.path.abspath(os.path.dirname(__file__)))
 
-#-----------------------------------------------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------------------------------------
 # streamlit run Toolbox\streamlit_app.py
-#-----------------------------------------------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------------------------------------
 
 # Example usage:
 n = 200  # Number of points
@@ -155,12 +155,8 @@ with tab3:
 
     st.write("Total weight: ", wing.weight)
 
-    st.header("Failure analysis:")
+    st.header("Max FI plotted as function of half span:")
     st.pyplot(wing.plot_max_FI())
 
-    #
-    # if failures:,
-    #     for point, fi in failures:
-    #         st.write(f"Failure detected at point {point} with indicator value {fi}.")
-    # else:
-    #     st.write("No failures detected.")
+    st.header("Full overview of failures:")
+    st.write(wing.get_hierarchy())

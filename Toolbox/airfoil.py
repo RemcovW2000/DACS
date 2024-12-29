@@ -262,8 +262,8 @@ class Airfoil(StructuralEntity):
                 # if the member contains reinforcement:
                 if member.startcoord[0] < self.trstart < member.endcoord[0]:
                     # this means the start is in the member, is the end in?
-                    member.submember = self.trpanel
-                    member.child_objects.append(self.trpanel)
+                    member.submember = copy.deepcopy(self.trpanel)
+                    member.child_objects.append(member.submember)
                     if member.endcoord[0] > self.trend:
                         # this means the end is also in the member, assign member submember:
                         member.submember_start = self.trstart
@@ -280,6 +280,7 @@ class Airfoil(StructuralEntity):
                     member.submember_start = member.startcoord[0]
                     member.submember_end = self.trend
 
+
         if self.brpanel:
             # this means there is a top reinforcement!
             for member in self.bot_members:
@@ -287,8 +288,9 @@ class Airfoil(StructuralEntity):
                 # if the member contains reinforcement:
                 if member.startcoord[0] < self.brstart < member.endcoord[0]:
                     # this means the start is in the member, is the end in?
-                    member.submember = self.brpanel
-                    member.child_objects.append(self.brpanel)
+                    member.submember = copy.deepcopy(self.brpanel)
+                    member.child_objects.append(member.submember)
+
                     if member.endcoord[0] > self.brend:
                         # this means the end is also in the member, assign member submember:
                         member.submember_start = self.brstart
@@ -1117,6 +1119,7 @@ class Airfoil(StructuralEntity):
         ax.set_ylabel('Y-axis')
         ax.set_title('Normal force intensity (N/mm)')
         return plt
+
     def calculate_member_curvature(self, member, side):
         '''
         Calculates curvature of one member and then assigns it to that member.
@@ -1162,6 +1165,7 @@ class Airfoil(StructuralEntity):
             self.calculate_member_curvature(member, side = 'bot')
 
         return
+
     def solve_stresses_CSA(self, moments, shearforces, center):
         '''
         Algorithm that solves for stresses, can be run after initialisation
@@ -1229,10 +1233,7 @@ class Airfoil(StructuralEntity):
         all_members = self.top_members + self.bot_members + self.spar_members
         member_FIs = [member.failure_analysis() for member in all_members]
 
-        self.set_failure_indicator('child', max([max(value for key, value in
-                                                     child_object.failure_indicators.items() if
-                                                     isinstance(value, (int, float))) for child_object in
-                                                 self.child_objects]))
+        self.finalize_failure_analysis(None)
 
         return max(value for key, value in self.failure_indicators.items() if isinstance(value, (int, float)))
 
@@ -1247,6 +1248,64 @@ class Airfoil(StructuralEntity):
 
         weight = np.sum([member.calculate_weight_per_b() for member in members])
         return weight
+
+    def plot_failure_overview(self):
+        # Coloring inside of the airfoil:
+        xlist = np.linspace(0.1, self.chord_length, 100)
+        top = [self.top_height_at(x) for x in xlist]
+        bot = [self.bot_height_at(x) for x in xlist]
+
+        plt.figure(figsize=(10, 6))
+        plt.fill_between(np.linspace(0, self.chord_length, len(xlist)), top, bot,
+                         color='lightblue', alpha=0.5)
+
+        def plotmembers(memberlist, color, label=None):
+            for idx, member in enumerate(memberlist):
+                xlist = [boom.location[0] + self.xbar for boom in member.booms]
+                ylist = [boom.location[1] + self.ybar for boom in member.booms]
+
+                # Place the text near the middle of each member
+                mid_index = len(member.booms) // 2
+                xlabel = xlist[mid_index] - 10
+                ylabel = ylist[mid_index] + 5
+
+                plt.text(xlabel, ylabel, color=color, fontsize=5)
+                plt.text(xlabel - 5, ylabel, idx, color='black', fontsize=8)
+
+                # Only set the label for the first member in the list
+                plt.plot(xlist, ylist, label=label if idx == 0 else None, color=color)
+            return
+
+        # Plotting top members:
+        plotmembers(self.top_members, 'orange', label='Top Members')
+
+        # Plotting bottom members:
+        plotmembers(self.bot_members, 'blue', label='Bottom Members')
+
+        # Plotting spar members:
+        plotmembers(self.spar_members, 'green', label='Spar Members')
+
+        # plot reinforcement:
+        if self.trpanel:
+            trxlist = np.linspace(self.trstart, self.trend, 20)
+            trylist = [self.top_height_at(x) for x in trxlist]
+            plt.plot(trxlist, trylist, label='Top reinforcement', color='black', linewidth=2)
+
+        if self.brpanel:
+            brxlist = np.linspace(self.brstart, self.brend, 20)
+            brylist = [self.bot_height_at(x) for x in brxlist]
+            plt.plot(brxlist, brylist, label='Bottom reinforcement', color='black', linewidth=2)
+
+        plt.axhline(y=self.ybar, linestyle='--', label='neutral bending axis')
+        plt.axvline(x=self.xbar, linestyle='--', label='neutral bending axis')
+        plt.axis('equal')
+        plt.xlabel('X values')
+        plt.ylabel('Heights')
+        plt.title('Top and Bottom Heights vs. X values')
+        plt.legend()
+        plt.grid(True)
+        return plt
+
 
     @staticmethod
     def calculate_axial_strain(kx, ky, x, y):

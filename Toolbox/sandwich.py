@@ -79,16 +79,14 @@ class Sandwich(StructuralEntity):
         # using the directions we can find the material strength in that direction
         wrinklingFI1 = self.wrinkling_analysis(L1stresses, L1directions, self.laminate1)
         wrinklingFI2 = self.wrinkling_analysis(L2stresses, L2directions, self.laminate2)
-        # Now use known formulas to find the failure indicators:
-        print('WrinklingFIs: ', wrinklingFI1, wrinklingFI2)
 
-        self.set_failure_indicator('wrinkling', wrinklingFI1)
-        self.set_failure_indicator('wrinkling', wrinklingFI2)
-        self.set_failure_indicator('first_ply_failure', FPFFI)
-        self.set_failure_indicator('child', max([max(value for key, value in
-                                                     child_object.failure_indicators.items() if
-                                                     isinstance(value, (int, float))) for child_object in
-                                                 self.child_objects]))
+        failure_modes = [
+            ['wrinkling', wrinklingFI1],
+            ['wrinkling', wrinklingFI2],
+            ['first_ply_failure', FPFFI]
+        ]
+        self.finalize_failure_analysis(failure_modes)
+
         return max(value for key, value in self.failure_indicators.items() if isinstance(value, (int, float)))
     def calculate_weight_per_A(self):
         '''

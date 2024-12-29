@@ -157,8 +157,11 @@ class Lamina(StructuralEntity):
             IFF_factor = self.IFF(sigma123)
             FF_factor = self.FF(sigma123)
 
-        self.set_failure_indicator('inter_fiber_failure', IFF_factor)
-        self.set_failure_indicator('fiber_failure', FF_factor)
+        failure_modes = [
+            ['inter_fiber_failure', IFF_factor],
+            ['fiber_failure', FF_factor]
+        ]
+        self.finalize_failure_analysis(failure_modes)
 
         # Now we check whether either of the criteria factors are greater than one
         if IFF_factor >= 1:

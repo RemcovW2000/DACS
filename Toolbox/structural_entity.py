@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Literal
+import copy
 
 failure_mode_options = Literal[
     'fiber_failure',
@@ -29,7 +30,6 @@ class StructuralEntity(ABC):
 
         # furthermore, how would I overwrite  the failure indicator?
         self.failure_indicators = {
-            'child': None,
         }
         self.name = name
 
@@ -53,9 +53,73 @@ class StructuralEntity(ABC):
         # failure indicator is initialised as an empty dictionary, but then failure indicators are added to it
         self.failure_indicators[failure_mode] = failure_indicator
 
-    def get_hierarchy(self):
+    def finalize_failure_analysis(self, failure_modes : list):
+        """
+        Finalizes the failure analysis by setting the failure indicators for the class.
+
+        Parameters:
+        first_ply_key (str): The key to use for the first ply failure indicator.
+        child_key (str): The key to use for the child failure indicator.
+        """
+        if failure_modes:
+            for failure_mode in failure_modes:
+                key = failure_mode[0]
+                FI = failure_mode[1]
+                self.set_failure_indicator(key, FI)
+
+        if self.child_objects:
+            child_max_key, child_max_indicator = max(
+                ((key, value) for child in self.child_objects if child
+                 for key, value in child.failure_indicators.items()
+                 if isinstance(value, (int, float))),
+                key=lambda x: x[1],
+                default=(None, 0)
+            )
+
+            if child_max_key[0:6] == 'child_':
+                child_key = child_max_key
+            else:
+                child_key = 'child_'
+                child_key += child_max_key
+
+            self.set_failure_indicator(child_key, child_max_indicator)
+
+        return max(value for key, value in self.failure_indicators.items() if isinstance(value, (int, float)))
+
+    def get_hierarchy(self, return_full : bool = False):
         '''
         Returns the lower hierarchy of child objects
         :return:
         '''
-        return
+        if return_full:
+            hierarchy_dict = copy.deepcopy(self.failure_indicators)
+            hierarchy_dict['object_name'] = self.name
+            hierarchy_dict['children'] = []
+
+            for child in self.child_objects:
+                if child:
+                    child_hierarchy_dict = child.get_hierarchy()
+
+                    hierarchy_dict['children'].append(child_hierarchy_dict)
+            return hierarchy_dict
+        else:
+            print(self.failure_indicators)
+            # only return something if the max FI > 1
+            # Find the key with the maximum value
+            max_key = max(self.failure_indicators, key=self.failure_indicators.get)
+
+            # Find the maximum value
+            max_value = self.failure_indicators[max_key]
+            if max_value >= 1:
+                hierarchy_dict = copy.deepcopy(self.failure_indicators)
+                hierarchy_dict['object_name'] = self.name
+                hierarchy_dict['children'] = []
+
+                for child in self.child_objects:
+                    if child:
+                        child_hierarchy_dict = child.get_hierarchy()
+                        if child_hierarchy_dict:
+                            hierarchy_dict['children'].append(child_hierarchy_dict)
+                return hierarchy_dict
+            else:
+                return None
