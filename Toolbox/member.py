@@ -256,7 +256,7 @@ class Member(StructuralEntity):
         AR = self.b/self.a
         if AR <= 1.4:
             Ncrit = self.combined_load_buckling_Ncrit_0_14(loads)
-            FI = abs(loads[0]/Ncrit)
+            FI = abs(loads[0]/(Ncrit*self.b))
         elif 1.4 < AR < 2:
             Nxycrit = self.shear_load_buckling_Ncrit_14_2()
             Nxcrit = self.normal_load_buckling_Ncrit()

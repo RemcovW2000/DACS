@@ -279,8 +279,9 @@ class Wing(StructuralEntity):
 
             chord = self.chord_at(y)
             type = 'NACA2410'
+            thickness = self.thickness_at(y)
             # make the option:
-            airfoil = Airfoil(type, 1, chord, spar_locations, top_members, bot_members, spar_members, reinforcementpaneltop, trstart,
+            airfoil = Airfoil(type, thickness, chord, spar_locations, top_members, bot_members, spar_members, reinforcementpaneltop, trstart,
                               trend, reinforcementpanelbot, brstart, brend)
             airfoil.xshear = self.shear_location_at(y)[0] - self.LE_at(y)   # x coordinate of point of application in airfoil FOR
             airfoil.yshear = self.shear_location_at(y)[1]                   # y coordinate of point of application in airfoil FOR, without twist is equal to 0

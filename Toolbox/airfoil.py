@@ -62,7 +62,6 @@ class Airfoil(StructuralEntity):
         self.airfoil_name_ = airfoil_name
         self.thickness = thickness
         self.chord_length = chord_length
-
         self.top_members = top_members
         self.bot_members = bot_members
         self.members = top_members + bot_members
@@ -120,6 +119,15 @@ class Airfoil(StructuralEntity):
 
         topcoordinates = [[element * self.chord_length for element in sublist] for sublist in topcoordinates]
         botcoordinates = [[element * self.chord_length for element in sublist] for sublist in botcoordinates]
+
+        airfoil_base_thickness = airfoilcoords[self.airfoil_name_]['thickness']
+        print(self.thickness)
+        print(airfoil_base_thickness)
+        thickness_factor = self.thickness / airfoil_base_thickness
+
+        topcoordinates = [[point[0], point[1] * thickness_factor] for point in topcoordinates]
+        botcoordinates = [[point[0], point[1] * thickness_factor] for point in botcoordinates]
+
         self.topcoordinates = topcoordinates
         self.botcoordinates = botcoordinates
 

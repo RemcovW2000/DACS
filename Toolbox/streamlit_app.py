@@ -16,7 +16,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 sys.path.append(os.path.abspath(os.path.dirname(__file__)))
 
 # ----------------------------------------------------------------------------------------------------------------------
-# streamlit run Toolbox\streamlit_app.py
+# python3 -m streamlit run Toolbox/streamlit_app.py
 # ----------------------------------------------------------------------------------------------------------------------
 
 # Example usage:
@@ -34,7 +34,7 @@ g = 9.81            # m/s
 lift = weight*load_factor*g
 lift_distribution = generate_lift_elyptical(n, half_span, lift)
 
-thickness_distribution = [10, 12, 14, 16, 18]  # Example thickness distribution
+thickness_distribution = [0.14, 0.12, 0.11, 0.10, 0.09, 0.09, 0.09, 0.09, 0.09, 0.09]  # Example thickness distribution
 half_span = 1500  # Half span of the wing
 spar_coordinates = [[[300/4, 0], [15 + 250/4, 1000], [75, 1500]],
                    [[200, 0], [185, 1000], [75, 1500]]]  # Example spar coordinates
@@ -58,7 +58,7 @@ wing.sparpanels = Laminates['CFQIezcomposites_spreadtow']
 moment_distribution = wing.internal_moment()
 shear_distribution = wing.shear_force()
 wing.tip_buffer = 50
-wing.nr_airfoils = 5
+wing.nr_airfoils = 10
 
 wing.generate_airfoil_objects()
 wing.solve_stresses_CSA()
