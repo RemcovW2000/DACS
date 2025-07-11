@@ -9,7 +9,7 @@ import scipy.interpolate as interp
 from Toolbox.damaged_region import *
 from Toolbox.curved_plate_data import k_function
 from Toolbox.laminate import laminate_builder
-from structural_entity import StructuralEntity
+from Toolbox.structural_entity import StructuralEntity
 
 class Member(StructuralEntity):
     def __init__(self, panel, loads = [0, 0, 0, 0, 0, 0], a = 300, b = 200):
@@ -199,7 +199,6 @@ class Member(StructuralEntity):
             # Curvature must have been assigned in airfoil class!
             Buckling_FI = self.buckling_analysis()
             FI_list = failureindicators_panel + [Buckling_FI]
-            print(failureindicators_panel, Buckling_FI)
             max_FI = max(FI_list)
             if self.submember:
                 FI_list.append(submember_max_FI)
@@ -213,6 +212,10 @@ class Member(StructuralEntity):
                             ' finised, add a way to run both buckling and first ply failure analysis using assigned'
                             'loads instead of loadcases derived from stress state in booms.')
         return max(value for key, value in self.failure_indicators.items() if isinstance(value, (int, float)))
+
+    def crippling_analysis(self):
+
+        return
 
     def buckling_analysis(self):
         '''

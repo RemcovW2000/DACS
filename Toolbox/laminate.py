@@ -6,7 +6,7 @@ import copy
 # Local imports
 from Toolbox.lamina import Lamina
 from Data import MP
-from structural_entity import StructuralEntity
+from Toolbox.structural_entity import StructuralEntity
 
 class Laminate(StructuralEntity):
     def __init__(self, laminas, Loads=None, Strains=None):
@@ -147,6 +147,10 @@ class Laminate(StructuralEntity):
             i.Epsilon = np.array([max1, max2, max3])
 
     def calculate_equivalent_properties(self):
+        '''
+        this ..
+        :return:
+        '''
         # Here we calculate the engineering constants (or equivalent properties):
         self.Ex = (self.A_matrix[0, 0] * self.A_matrix[1, 1] - self.A_matrix[0, 1] ** 2) / (self.h * self.A_matrix[1, 1])
         self.Ey = (self.A_matrix[0, 0] * self.A_matrix[1, 1] - self.A_matrix[0, 1] ** 2) / (self.h * self.A_matrix[0, 0])

@@ -1,7 +1,7 @@
 import numpy as np
 import scipy.optimize as opt
 
-from structural_entity import StructuralEntity
+from Toolbox.structural_entity import StructuralEntity
 class Lamina(StructuralEntity):
     """
     Represents a single ply of a composite laminate.

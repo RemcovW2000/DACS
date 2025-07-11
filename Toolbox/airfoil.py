@@ -16,7 +16,7 @@ from Toolbox.damaged_region import *
 from Toolbox.member import Member
 from Toolbox.section import Section
 from Toolbox.helperclasses import boom, segment
-from structural_entity import StructuralEntity
+from Toolbox.structural_entity import StructuralEntity
 
 '''
 Shear flow has to be fixed,
@@ -28,17 +28,20 @@ segments p1 and p2 are defined
 the sign of qs may not by definition coincide with the direction of the segment (from p1 to p2)
 '''
 
+
+class Point2D:
+    def __init__(self, x: float, y: float):
+        self.x = x
+        self.y = y
+
 class Airfoil(StructuralEntity):
     """
-        Represents an airfoil for structural analysis.
-
-        Attributes:
-            chord_length (float): Length of the chord (m).
+        Represents the cross-section of an airfoil for structural analysis
         """
     def __init__(self, airfoil_name, thickness, chord_length, spar_locations, top_members, bot_members, spar_members, trpanel = None, trstart = None, trend = None, brpanel = None, brstart = None, brend = None):
         """
-        We make the assumption that the laminate does not change within a member!
-        For now we'll assume the whole structure is sandwich panel?
+        laminate is constant in member
+        # TODO add compatibility with plain laminates
 
         :param spar_locations: locations from LE to TE of spars
         :param airfoil_name_:
@@ -84,10 +87,10 @@ class Airfoil(StructuralEntity):
 
         self.segment_length = 1 #length of segments in mm
         self.structuralidealisation = False
-        self.Mx = 0
-        self.My = 0
-        self.Sx = 0
-        self.Sy = 0
+        self.Mx_ = 0
+        self.My_ = 0
+        self.Sx_ = 0
+        self.Sy_ = 0
         self.yshear = 0
         self.xshear = 0
 
@@ -104,6 +107,7 @@ class Airfoil(StructuralEntity):
         self.assign_submembers()
 
         self.y = None
+        self.twist = 0 # zero by default
 
 # ------------------------------------------------------------------------------------------------------
 # Helper functions, not called in the algorithms directly, but in functions
@@ -112,7 +116,39 @@ class Airfoil(StructuralEntity):
     def child_objects(self):
         return self.top_members + self.bot_members + self.spar_members
 
-    def top_bot_coordinates(self):
+    @property
+    def Mx(self):
+        return self.Mx_
+
+    @Mx.setter
+    def Mx(self, value):
+        self.Mx_ = value
+
+    @property
+    def My(self):
+        return self.My_
+
+    @My.setter
+    def My(self, value):
+        self.My_ = value
+
+    @property
+    def Sx(self):
+        return self.Sx_
+
+    @Sx.setter
+    def Sx(self, value):
+        self.Sx_ = value
+
+    @property
+    def Sy(self):
+        return self.Sy_
+
+    @Sy.setter
+    def Sy(self, value):
+        self.Sy_ = value
+
+    def get_top_bot_coordinates(self) -> tuple[list[Point2D], list[Point2D]]:
         # transform the coordinates as neccesary:
         topcoordinates = self.top_coordinates_base
         botcoordinates = self.bot_coordinates_base
@@ -121,8 +157,6 @@ class Airfoil(StructuralEntity):
         botcoordinates = [[element * self.chord_length for element in sublist] for sublist in botcoordinates]
 
         airfoil_base_thickness = airfoilcoords[self.airfoil_name_]['thickness']
-        print(self.thickness)
-        print(airfoil_base_thickness)
         thickness_factor = self.thickness / airfoil_base_thickness
 
         topcoordinates = [[point[0], point[1] * thickness_factor] for point in topcoordinates]
@@ -133,7 +167,7 @@ class Airfoil(StructuralEntity):
 
         return self.topcoordinates, self.botcoordinates
 
-    def calculate_area(self, top_points, bottom_points):
+    def calculate_area(self, top_points, bottom_points) -> float:
         """
         Calculate the area enclosed by the airfoil section, defined by the top and bottom surfaces.
 
@@ -142,7 +176,6 @@ class Airfoil(StructuralEntity):
         :return: The area enclosed by the box-shaped object.
         """
 
-        # Ensure points are in correct order to form a closed polygon
         # Top points go from left to right and bottom points from right to left to form the perimeter
         polygon_points = top_points + bottom_points
 
@@ -340,7 +373,7 @@ class Airfoil(StructuralEntity):
         EAxtot = 0
         EAtot = 0
         for member in self.top_members:
-            npoints = 10  # TODO: placeholder!
+            npoints = 100  # TODO: placeholder!
 
             # in the top_members list, we know the start and end coordinates:
             xlist = np.linspace(member.startcoord[0], member.endcoord[0], npoints)
@@ -369,7 +402,7 @@ class Airfoil(StructuralEntity):
                 EAtot += EA
 
         for member in self.bot_members:
-            npoints = 10  # TODO: placeholder!
+            npoints = 100  # TODO: placeholder!
 
             # in the top_members list, we know the start and end coordinates:
             xlist = np.linspace(member.startcoord[0], member.endcoord[0], npoints)
@@ -568,7 +601,14 @@ class Airfoil(StructuralEntity):
                 EIxy += Ilist[2]*member.get_Ex(x)
         return EIxx, EIyy, EIxy
 
+    @staticmethod
+    def rotate_moments(Mx, My, twist):
+        Mx_out = np.sin(np.deg2rad(twist)) * Mx + np.cos(np.deg2rad(twist)) * My
+        My_out = np.sin(np.deg2rad(twist)) * My + np.cos(np.deg2rad(twist)) * Mx
+        return Mx_out, My_out
+
     def calculate_curvatures(self, Mx, My):
+        Mx, My = self.rotate_moments(Mx, My, self.twist)
         EIxx = self.EIxx
         EIyy = self.EIyy
         EIxy = self.EIxy
@@ -598,12 +638,6 @@ class Airfoil(StructuralEntity):
         else:
             td = member.get_h(x)
 
-        # IMPORTANT:
-        # If the strains are both very close to 0 due to the points being close to the neutral axis, this calculation
-        # will have numerical instabilities that deteriorate the accuracy of the solution. As a result, assume then
-        # that the strain is equal in both booms (zero value thus equal), and assign the ratio between stresses as s1/s2 = 1:
-        # check also 'Aircraft structures for engineering students' page 607.
-
         slow = 1e-11
         if e1 < slow or e2 < slow:
             B1 = (td * b / 6) * 3
@@ -617,14 +651,9 @@ class Airfoil(StructuralEntity):
 
         # Check bounds for the area ratio
         tolerance = 0.05  # Allowable deviation (5%)
-        p1print = [p1[0]+self.xbar, p1[1] + self.ybar]
-        p2print = [p2[0] + self.xbar, p2[1] + self.ybar]
         if not (1 - tolerance <= area_ratio <= 1 + tolerance):
-            # TODO: fix this! when the magnitudes of strain are different due to higher or lower values for moment, the fixed value of 10e-11 does nothing!
-            print(
-                f"Warning: Area ratio out of bounds: {area_ratio:.3f} at point {p1print}, {p2print}, ybar = {self.ybar:.3f} "
-                f"with member start {member.startcoord} and end {member.endcoord}. e1 = {e1}, e2 = {e2}"
-            )
+            B1 = b * td / 2
+            B2 = b * td / 2
         return B1, B2, s1, s2
 
     def generate_booms(self, memberlist, side, Mx, My):
@@ -785,7 +814,6 @@ class Airfoil(StructuralEntity):
         return Brxr, Bryr
 
     def section_shear_flows(self, Sx, Sy):
-        # TODO: what does this function do?
         self.generate_booms(self.top_members, 'top', self.Mx, self.My)
         self.generate_booms(self.bot_members, 'bot', self.Mx, self.My)
         self.generate_spar_booms()
@@ -1179,9 +1207,11 @@ class Airfoil(StructuralEntity):
         Algorithm that solves for stresses, can be run after initialisation
         :return:
         '''
-        self.Mx, self.My = moments
-        self.Sx, self.Sy = shearforces
-        # TODO: fix these dimensions so they are in the global (wing) FOR?
+        self.Mx = np.sin(np.deg2rad(self.twist)) * moments[0] + np.cos(np.deg2rad(self.twist)) * moments[1]
+        self.My = np.sin(np.deg2rad(self.twist)) * moments[1] + np.cos(np.deg2rad(self.twist)) * moments[0]
+        self.Sy = np.sin(np.deg2rad(self.twist)) * shearforces[0] + np.cos(np.deg2rad(self.twist)) * shearforces[1]
+        self.Sx = -np.sin(np.deg2rad(self.twist)) * shearforces[1] + np.cos(np.deg2rad(self.twist)) * shearforces[0]
+
         self.xshear, self.yshear = center # relative to the local airfoil FOR
 
         # Functions for the normal stresses/deformations:
@@ -1356,6 +1386,7 @@ class Airfoil(StructuralEntity):
         R = np.sqrt(a ** 2 + b ** 2 - C / D)
 
         return R
+
 
 
 

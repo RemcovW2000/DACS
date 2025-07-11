@@ -2,7 +2,7 @@ import copy
 
 import numpy as np
 import Data.Panels
-from structural_entity import StructuralEntity
+from Toolbox.structural_entity import StructuralEntity
 
 class Sandwich(StructuralEntity):
     def __init__(self, laminate1, laminate2, core, Loads = None, Strains = None):

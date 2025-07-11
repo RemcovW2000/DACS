@@ -36,6 +36,7 @@ class StructuralEntity(ABC):
     @property
     def child_objects(self):
         return []
+
     @abstractmethod
     def failure_analysis(self):
         '''
@@ -103,7 +104,6 @@ class StructuralEntity(ABC):
                     hierarchy_dict['children'].append(child_hierarchy_dict)
             return hierarchy_dict
         else:
-            print(self.failure_indicators)
             # only return something if the max FI > 1
             # Find the key with the maximum value
             max_key = max(self.failure_indicators, key=self.failure_indicators.get)

@@ -1,3 +1,4 @@
+from concurrent.futures import ProcessPoolExecutor
 import numpy as np
 import copy
 import matplotlib.pyplot as plt
@@ -12,7 +13,7 @@ class Wing(StructuralEntity):
     """
     Wing Class
     """
-    def __init__(self, lift_distribution, chord_distribution, LE_locations, thickness_distribution, half_span, rib_coordinates, spar_coordinates):
+    def __init__(self, lift_distribution, chord_distribution, LE_locations, thickness_distribution, twist_distribution, half_span, rib_coordinates, spar_coordinates):
         """
         :param airfoilcoords: list
         - list containing 2 lists
@@ -47,6 +48,7 @@ class Wing(StructuralEntity):
         super().__init__('wing')
         self.lift_distribution = lift_distribution            # List containing lift per unit span as function of partial span coordinate
         self.chord_distribution = chord_distribution          # List containing chord as function of partial span coordinate y
+        self.twist_distribution = twist_distribution          # List containing twist as function of partian span coordinate y
         self.LE_locations = LE_locations                      # List containing the location of the leading edge as a function of partial span coordinate y
         self.thickness_distribution = thickness_distribution  # list defining the thickness of the wing as a function of the partial span coordinate y, NOT CURRENLY USED!
         self.half_span = half_span                            # The half span of the wing
@@ -106,14 +108,13 @@ class Wing(StructuralEntity):
         return LE_interp(y)
 
     def thickness_at(self, y):
-        """
-        NOT CURRENLY USED
-        Interpolates the thickness of the airfoil
-        :param location: float
-        :return: float
-        """
         listofpoints = np.linspace(0, self.half_span, len(self.thickness_distribution))
         thickness_interp = interp1d(listofpoints, self.thickness_distribution, kind='linear')
+        return thickness_interp(y)
+
+    def twist_at(self, y):
+        listofpoints = np.linspace(0, self.half_span, len(self.twist_distribution))
+        thickness_interp = interp1d(listofpoints, self.twist_distribution, kind='linear')
         return thickness_interp(y)
 
     def internal_moment(self):
@@ -258,7 +259,6 @@ class Wing(StructuralEntity):
         :return:
         """
         analysislocations = np.linspace(0, self.half_span - self.tip_buffer, self.nr_airfoils)
-        # TODO: add twist in the frame of reference
 
         reinforcement_end = self.trpanels[-1][1]
         airfoils = []
@@ -285,9 +285,9 @@ class Wing(StructuralEntity):
                               trend, reinforcementpanelbot, brstart, brend)
             airfoil.xshear = self.shear_location_at(y)[0] - self.LE_at(y)   # x coordinate of point of application in airfoil FOR
             airfoil.yshear = self.shear_location_at(y)[1]                   # y coordinate of point of application in airfoil FOR, without twist is equal to 0
-            airfoils.append(airfoil)
             airfoil.y = y
-
+            airfoil.twist = self.twist_at(y)
+            airfoils.append(airfoil)
         self.airfoils = airfoils
         return
 
@@ -343,31 +343,11 @@ class Wing(StructuralEntity):
         spar_members = [Member(panel) for _ in range(len(spars))]
         return spar_members
 
-    def curvatures_at(self, y):
-        """
-        Does analysis of a cross section of the wing at location y along the half span
-        :return:
-        """
-        moment = self.moment_at(y)
-        spars = self.spar_positions_at(y)-self.LE_at(y) # list of spar locations? or of objects? these indicate the locations of the spars for
-                    # cross sectional analysis
-        thickness = self.thickness_at(y)
-        chord_length = self.chord_at(y)
-        top_members = self.top_members_at(y)
-        bot_members = self.bot_members_at(y)
-        spar_members = self.spar_members_at(y)
-        airfoil = Airfoil('NACA2410', thickness, chord_length, spars, top_members, bot_members, spar_members, )
-        airfoil.neutral_points()
-        airfoil.calculate_EI()
-        kx, ky = airfoil.curvatures(moment, 0)
-        return kx, ky
 
-    def calculate_deflection(self, num_points=10):
-        # Sample points along the half span
-        y_points = np.linspace(0, self.half_span, num=num_points)
-
+    def calculate_deflection(self):
         # Calculate curvatures at the sampled points
-        curvatures = np.array([self.curvatures_at(y) for y in y_points])
+        y_points = [airfoil.y for airfoil in self.airfoils]
+        curvatures = np.array([airfoil.calculate_curvatures(self.moment_at(airfoil.y), 0) for airfoil in self.airfoils])
 
         # Integrate curvature to get slope
         slope = self.cumulative_trapezoid(curvatures, y_points, initial=0)
@@ -378,7 +358,7 @@ class Wing(StructuralEntity):
         return y_points, deflection
 
     def plot_deflection(self, num_points=100):
-        y_points, deflection = self.calculate_deflection(num_points)
+        y_points, deflection = self.calculate_deflection()
 
         # Plot the deflection
         plt.figure(figsize=(10, 6))
@@ -388,7 +368,7 @@ class Wing(StructuralEntity):
         plt.title('Deflection of the Wing')
         plt.legend()
         plt.grid(True)
-        plt.show()
+        return plt
 
     def spar_positions_at(self, location):
         """

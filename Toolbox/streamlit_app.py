@@ -7,6 +7,7 @@ from laminate import laminate_builder
 from member import Member
 from wing import generate_chord_and_leading_edge_elyptical, generate_chord_and_leading_edge_tapered,  generate_lift_elyptical, Wing
 from Data.Panels import Sandwiches, Laminates
+import multiprocessing
 import copy
 import sys
 import os
@@ -29,12 +30,13 @@ chord_lengths, leading_edge_locations = generate_chord_and_leading_edge_tapered(
 
 # Example usage:
 weight = 25         # kg
-load_factor = 4     # g
+load_factor = 10     # g
 g = 9.81            # m/s
 lift = weight*load_factor*g
 lift_distribution = generate_lift_elyptical(n, half_span, lift)
 
 thickness_distribution = [0.14, 0.12, 0.11, 0.10, 0.09, 0.09, 0.09, 0.09, 0.09, 0.09]  # Example thickness distribution
+twist_distribution = [20, 20, 20, 20]
 half_span = 1500  # Half span of the wing
 spar_coordinates = [[[300/4, 0], [15 + 250/4, 1000], [75, 1500]],
                    [[200, 0], [185, 1000], [75, 1500]]]  # Example spar coordinates
@@ -42,7 +44,7 @@ rib_coordinates = [0, 600, 1200, 1400]
 
 reinforcementcoordinates = [[300/4, 0], [75, 500], [75, 1000]] # list containing reinforcement coordinates: [[x, y], [x, y] ... ]
 
-wing = Wing(lift_distribution, chord_lengths, leading_edge_locations, thickness_distribution, half_span, rib_coordinates, spar_coordinates)
+wing = Wing(lift_distribution, chord_lengths, leading_edge_locations, thickness_distribution, twist_distribution, half_span, rib_coordinates, spar_coordinates)
 
 wing.toppanels = [[Laminates['CFQIezcomposites_spreadtow'], 500], [Laminates['CFQIezcomposites_spreadtow'], 1600]]
 wing.botpanels = [[Laminates['CFQIezcomposites_spreadtow'], 500], [Laminates['CFQIezcomposites_spreadtow'], 1600]]
@@ -73,7 +75,7 @@ data = {
 }
 df = pd.DataFrame(data)
 # Create tabs
-tab1, tab2, tab3 = st.tabs(["Wing design overview", "Airfoil force intensities", "Failure analysis data overview"])
+tab1, tab2, tab3 = st.tabs(["Design overview", "Stresses", "Performance overview"])
 
 # Content for Tab 1
 with tab1:
@@ -155,6 +157,7 @@ with tab3:
 
     st.write("Total weight: ", wing.weight)
 
+    st.pyplot(wing.plot_deflection())
     st.header("Max FI plotted as function of half span:")
     st.pyplot(wing.plot_max_FI())
 
